@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, feature/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: skilly
+          POSTGRES_PASSWORD: skilly
+          POSTGRES_DB: skilly
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Lint
+        run: |
+          cd backend
+          pip install flake8
+          flake8 app
+      - name: Test
+        run: |
+          cd backend
+          pytest
+      - name: Build Docker image
+        run: |
+          docker build -t skilly-backend ./backend
