@@ -1,0 +1,59 @@
+Skilly - Documentazione Progetto
+================================
+
+Descrizione
+-----------
+Web app full stack con backend FastAPI, frontend React e database PostgreSQL. Gestione CI/CD con GitHub Actions, Docker per sviluppo e produzione.
+
+Struttura del progetto
+----------------------
+- backend/: API FastAPI, modelli, servizi, migrazioni (Alembic)
+- frontend/: React/TypeScript, UI e chiamate API
+- docker-compose.yml: orchestration di backend e database
+- .github/workflows/ci.yml: pipeline CI/CD (lint, test, build)
+
+Setup rapido
+------------
+1. Clona il repository
+   git clone https://github.com/MeryemeBanani/skilly.git
+   cd skilly
+
+2. Backend
+   - Crea e attiva il venv:
+     cd backend
+     python -m venv venv
+     .\venv\Scripts\activate
+     pip install -r requirements.txt
+   - Configura il database in alembic.ini (esempio: postgresql://skilly:skilly@localhost:5432/skilly)
+   - Migrazioni:
+     alembic upgrade head
+
+3. Frontend
+   cd frontend
+   npm install
+   npm start
+
+4. Docker (opzionale)
+   docker-compose up -d
+
+Database
+--------
+- PostgreSQL gestito tramite Docker Compose
+- Migrazioni con Alembic
+- Tabelle principali: users, documents (JSONB), embeddings (pgvector), jobs, searches
+
+CI/CD
+-----
+- Lint e test automatici su ogni push/pull request (GitHub Actions)
+- Build Docker automatica
+
+Testing
+-------
+- Test Python in backend/tests/ con pytest
+- Lint con flake8
+
+Contributi
+----------
+1. Crea un branch da dev o feature
+2. Fai commit e push
+3. Apri una pull request
