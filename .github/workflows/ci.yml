@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, feature/* ]
+    branches: [ main,dev,feature/* ]
   pull_request:
     branches: [ main ]
 
@@ -34,7 +34,6 @@ jobs:
       - name: Lint
         run: |
           cd backend
-          pip install flake8
           flake8 app
       - name: Test
         run: |
