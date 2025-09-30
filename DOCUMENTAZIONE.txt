@@ -15,8 +15,8 @@ Struttura del progetto
 Setup rapido
 ------------
 1. Clona il repository
-   git clone https://github.com/MeryemeBanani/skilly.git
-   cd skilly
+   git clone https://github.com/MeryemeBanani/PiazzaTi.git
+   cd PiazzaTi
 
 2. Backend
    - Crea e attiva il venv:
