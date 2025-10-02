@@ -1,4 +1,4 @@
-Skilly - Documentazione Progetto
+PiazzaTi - Documentazione Progetto
 ================================
 
 Descrizione
@@ -86,7 +86,56 @@ Il progetto usa SQLAlchemy per la connessione al database PostgreSQL:
 4. Sicurezza:
    - File .env escluso da git (.gitignore)
    - Template .env.example per altri sviluppatori
-   - Credenziali mai presenti nel codice
+   - Credenziali mai presenti nel codice, ad esempio la password di postgresql
+
+Migrazioni Database MVP - Schema Aggiornato
+------------------------------------------
+Il progetto include una migrazione Alembic completa (001_mvp_update.py) che aggiorna 
+lo schema database per l'MVP con ottimizzazioni strategiche:
+
+DOCUMENTS - Aggiornamenti principali:
+• Nuovi campi:
+  - title: titolo leggibile per UI immediata
+  - description_raw: testo originale per XAI e highlight skill
+  - version: versioning CV (utente può caricare più versioni)
+  - is_latest: flag per CV attivo (solo uno per utente)
+
+• Vincoli di integrità:
+  - language VARCHAR(2): standardizzazione ISO (evita "ITA/it/italiano")
+  - status CHECK: solo valori validi (uploaded/parsed/failed)
+  - UNIQUE parziale: un solo CV "latest" per utente
+
+• Indici di performance:
+  - GIN su parsed_json: query veloci su skill/requisiti
+  - Parziale su JD aperti: ottimizza ricerche (status=parsed)
+  - Unique latest CV: enforcement DB level
+
+• View semplificate:
+  - cv_documents: filtra solo CV
+  - jd_documents: filtra solo Job Descriptions
+
+EMBEDDINGS - Ottimizzazioni similarity search:
+• FK CASCADE: cleanup automatico embedding orfani
+• Indice ANN ivfflat: nearest-neighbor search veloce
+  - lists=100: divide spazio vettoriale in 100 cluster
+  - cosine ops: distanza coseno per embedding normalizzati
+  - Performance: 10-100x più veloce delle scansioni lineari
+
+SEARCHES - Audit e cronologia:
+• Indice (user_id, created_at): cronologia ricerche veloce
+
+SEARCH_RESULTS - Tracciamento completo:
+• created_at DEFAULT NOW(): timestamp per audit e fairness
+• clicked DEFAULT false: consistenza dati
+• FK CASCADE: integrità relazionale
+• Indice (search_id, rank): query top-k risultati ottimizzate
+
+Comando per applicare le migrazioni:
+   cd backend
+   python -m alembic upgrade head
+
+IMPORTANTE: Per sviluppo locale, usare DB_HOST=localhost nel .env
+Per Docker, usare DB_HOST=host.docker.internal
 
 Troubleshooting Database
 -----------------------
