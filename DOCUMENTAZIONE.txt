@@ -31,13 +31,20 @@ Setup rapido
      DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
 
 3. Backend
-   Opzione A - Con Docker (consigliata):
+   Opzione A - Con Docker (consigliata per sviluppo, più pulito e semplice):
      docker-compose up --build
+     
+     Configurazione Docker per sviluppo:
+     • Uvicorn con --reload: riavvio automatico quando modifichi il codice
+     • Volume mapping: le modifiche ai file si riflettono subito nel container
+     • Porta 8000 esposta: http://localhost:8000
    
-   Opzione B - Sviluppo locale (non necessaria se volete solo testare)
+   Opzione B - Sviluppo locale diretto (sconsigliato per team):
      cd backend
      python -m venv venv
      .\venv\Scripts\activate
+     pip install -r requirements.txt
+     python -m uvicorn app.main:app --reload
      pip install -r requirements.txt
      uvicorn app.main:app --reload
 
@@ -46,7 +53,7 @@ Setup rapido
    - Health check: http://localhost:8000/health
    - Test DB: http://localhost:8000/db-test (deve restituire "database_connected")
 
-5. Migrazioni database (quando necessario)
+5. Migrazioni database (quando necessario per modificare)
    cd backend
    alembic upgrade head
 
@@ -54,6 +61,25 @@ Setup rapido
    cd frontend
    npm install
    npm start
+
+Modalità Sviluppo - Hot Reload
+------------------------------
+Il progetto è configurato per il reload automatico durante lo sviluppo:
+
+• Docker: Uvicorn con --reload nel Dockerfile
+  - Modifica un file → Container si riavvia → Vedi subito le modifiche
+  - Volume mapping attivo: ./backend:/app
+
+• Locale: python -m uvicorn app.main:app --reload
+  - WatchFiles monitora i cambiamenti
+  - Riavvio automatico del server FastAPI
+
+Vantaggi del --reload:
+• Sviluppo veloce: niente restart manuali
+• Debug efficace: vedi subito gli errori
+• Produttività: modifica → salva → test immediato
+
+NOTA: In produzione rimuovere --reload per performance ottimali.
 
 Modifiche database effettuate:
 --------
