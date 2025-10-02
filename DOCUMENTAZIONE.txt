@@ -9,7 +9,7 @@ Struttura del progetto
 ----------------------
 - backend/: API FastAPI, modelli, servizi, migrazioni (Alembic)
 - frontend/: React/TypeScript, UI e chiamate API
-- docker-compose.yml: orchestration di backend e database
+- docker-compose.yml: orchestration del backend (database esterno per ora, non gestito da docker)
 - .github/workflows/ci.yml: pipeline CI/CD (lint, test, build)
 
 Setup rapido
@@ -18,29 +18,82 @@ Setup rapido
    git clone https://github.com/MeryemeBanani/PiazzaTi.git
    cd PiazzaTi
 
-2. Backend
-   - Crea e attiva il venv:
+2. Configurazione Database PostgreSQL locale (IMPORTANTE)
+   - Assicurati di avere PostgreSQL installato e in esecuzione (pgAdmin lo cosniglio per avere un controllo visivo di ciò che succede al db)
+   - Crea il database: psql -U postgres -c "CREATE DATABASE \"db_PiazzaTi\";" (per esempio, questo lo puoi fare su pgadmin senza scomodare la linea di comando)
+   - Copia il file di configurazione: cp backend/.env.example backend/.env (ti serve per configurare il file .env che non ho caricato e anche voi non dovete caricare su git perchè contiene info sensibili)
+   - Modifica backend/.env con le TUE credenziali:
+     DB_USER=postgres
+     DB_PASSWORD=la_tua_password
+     DB_HOST=host.docker.internal  # per Docker, o localhost per sviluppo locale
+     DB_PORT=5432
+     DB_NAME=db_PiazzaTi
+     DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+
+3. Backend
+   Opzione A - Con Docker (consigliata):
+     docker-compose up --build
+   
+   Opzione B - Sviluppo locale (non necessaria se volete solo testare)
      cd backend
      python -m venv venv
      .\venv\Scripts\activate
      pip install -r requirements.txt
-   - Configura il database in alembic.ini (esempio: postgresql://skilly:skilly@localhost:5432/skilly)
-   - Migrazioni:
-     alembic upgrade head
+     uvicorn app.main:app --reload
 
-3. Frontend
+4. Test della connessione database (dovrebbe aprirvi una pagina web dove vedere i risultati delle query)
+   - Backend: http://localhost:8000
+   - Health check: http://localhost:8000/health
+   - Test DB: http://localhost:8000/db-test (deve restituire "database_connected")
+
+5. Migrazioni database (quando necessario)
+   cd backend
+   alembic upgrade head
+
+6. Frontend (incompleto)
    cd frontend
    npm install
    npm start
 
-4. Docker (opzionale)
-   docker-compose up -d
-
-Database
+Modifiche database effettuate:
 --------
-- PostgreSQL gestito tramite Docker Compose
+- PostgreSQL locale (non più in Docker per sviluppo)
+- Nome database: db_PiazzaTi
+- Configurazione tramite file .env (mai committare con credenziali!)
 - Migrazioni con Alembic
-- Tabelle principali: users, documents (JSONB), embeddings (pgvector), jobs, searches
+- Tabelle principali: users, documents (JSONB), embeddings (pgvector), searches
+- SQLAlchemy per ORM con connessione automatica da DATABASE_URL
+
+Configurazione Database - Dettagli Tecnici
+------------------------------------------
+Il progetto usa SQLAlchemy per la connessione al database PostgreSQL:
+
+1. File backend/app/database.py gestisce:
+   - Caricamento automatico del DATABASE_URL da .env
+   - Creazione del motore SQLAlchemy
+   - SessionLocal per le transazioni
+   - Base per i modelli ORM
+   - Dependency get_db() per FastAPI
+
+2. File backend/alembic/env.py configurato per:
+   - Leggere DATABASE_URL da .env automaticamente
+   - Gestire migrazioni su database locale
+
+3. Endpoint di diagnostica:
+   - /health: verifica configurazione
+   - /db-test: testa connessione effettiva
+
+4. Sicurezza:
+   - File .env escluso da git (.gitignore)
+   - Template .env.example per altri sviluppatori
+   - Credenziali mai presenti nel codice
+
+Troubleshooting Database
+-----------------------
+- Errore "database non esiste": Creare db_PiazzaTi con psql
+- Errore "connessione rifiutata": Verificare che PostgreSQL sia in esecuzione
+- Errore "password errata": Controllare credenziali in .env
+- Docker non si connette: Usare host.docker.internal invece di localhost
 
 CI/CD
 -----
@@ -55,5 +108,6 @@ Testing
 Contributi
 ----------
 1. Crea un branch da dev o feature
-2. Fai commit e push
-3. Apri una pull request
+2. Configura il tuo .env locale (copia da .env.example)
+3. Fai commit e push (il .env non verrà mai committato)
+4. Apri una pull request
