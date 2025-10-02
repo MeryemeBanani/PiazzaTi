@@ -3,6 +3,8 @@
 services:
   backend:
     build: ./backend
+    env_file:
+      - ./backend/.env
     container_name: skilly-backend
     ports:
       - "8000:8000"
