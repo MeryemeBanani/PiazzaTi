@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.database import get_db, engine
 from dotenv import load_dotenv
 import os
@@ -29,7 +30,7 @@ async def test_database_connection(db: Session = Depends(get_db)):
     """Endpoint per testare la connessione al database"""
     try:
         # Esegui una query semplice per testare la connessione
-        result = db.execute("SELECT 1")
+        result = db.execute(text("SELECT 1"))
         return {"status": "database_connected", "result": "OK"}
     except Exception as e:
         return {"status": "database_error", "error": str(e)}
