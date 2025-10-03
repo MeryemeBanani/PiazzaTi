@@ -1,0 +1,79 @@
+{
+  "enums": {
+    "document_status": ["uploaded", "parsed", "failed"],
+    "document_type": ["cv", "jd"],
+    "search_type": ["cv_search", "jd_search"],
+    "user_role": ["candidate", "recruiter", "admin"]
+  },
+  "tables": {
+    "documents": {
+      "columns": {
+        "id": { "type": "uuid", "pk": true, "not_null": true },
+        "user_id": { "type": "uuid" },
+        "type": { "type": "document_type" },
+        "raw_file_url": { "type": "character varying" },
+        "parsed_json": { "type": "jsonb" },
+        "language": { "type": "character varying" },
+        "status": { "type": "document_status", "note": "Stato del documento: uploaded, parsed, failed" },
+        "created_at": { "type": "timestamp", "default": "now()" },
+        "updated_at": { "type": "timestamp", "default": "now()" }
+      }
+    },
+    "embeddings": {
+      "columns": {
+        "id": { "type": "uuid", "pk": true, "not_null": true },
+        "document_id": { "type": "uuid", "unique": true },
+        "embedding": { "type": "public.vector", "note": "Embedding SBERT MiniLM-L12-v2" },
+        "model_name": { "type": "text", "default": "'sentence-transformers/MiniLM-L12-v2'::text" },
+        "model_dim": { "type": "integer", "default": 384 },
+        "is_active": { "type": "boolean", "default": true },
+        "created_at": { "type": "timestamp", "default": "now()" },
+        "updated_at": { "type": "timestamp", "default": "now()" }
+      }
+    },
+    "search_results": {
+      "columns": {
+        "id": { "type": "uuid", "pk": true, "not_null": true },
+        "search_id": { "type": "uuid" },
+        "document_id": { "type": "uuid" },
+        "score": { "type": "doubleprecision" },
+        "rank": { "type": "integer" },
+        "clicked": { "type": "boolean" },
+        "feedback": { "type": "character varying", "note": "Valutazione esplicita dell’utente" }
+      }
+    },
+    "searches": {
+      "columns": {
+        "id": { "type": "uuid", "pk": true, "not_null": true },
+        "user_id": { "type": "uuid" },
+        "query_text": { "type": "character varying" },
+        "query_vector": { "type": "public.vector", "note": "Embedding semantico della query" },
+        "filters": { "type": "jsonb" },
+        "type": { "type": "search_type" },
+        "created_at": { "type": "timestamp", "default": "now()" }
+      }
+    },
+    "users": {
+      "columns": {
+        "id": { "type": "uuid", "pk": true, "not_null": true },
+        "name": { "type": "character varying" },
+        "email": { "type": "character varying", "unique": true, "not_null": true },
+        "password_hash": { "type": "character varying" },
+        "role": { "type": "user_role", "note": "Ruolo utente: candidate, recruiter, admin" },
+        "created_at": { "type": "timestamp", "default": "now()" },
+        "updated_at": { "type": "timestamp", "default": "now()" },
+        "last_login": { "type": "timestamp" },
+        "is_active": { "type": "boolean", "default": true },
+        "phone": { "type": "character varying" },
+        "company": { "type": "character varying" }
+      }
+    }
+  },
+  "relationships": [
+    { "from": "documents.user_id", "to": "users.id", "on_delete": "cascade" },
+    { "from": "embeddings.document_id", "to": "documents.id", "on_delete": "cascade" },
+    { "from": "search_results.document_id", "to": "documents.id", "on_delete": "cascade" },
+    { "from": "search_results.search_id", "to": "searches.id", "on_delete": "cascade" },
+    { "from": "searches.user_id", "to": "users.id", "on_delete": "cascade" }
+  ]
+}

@@ -1,0 +1,179 @@
+{
+  "enums": {
+    "document_status": [
+      "uploaded", "parsed", "parsing_failed", "embedding_failed",
+      "draft", "open", "closed"
+    ],
+    "document_type": ["cv", "jd"],
+    "search_type": ["cv_search", "jd_search"],
+    "user_role": ["candidate", "recruiter", "admin"]
+  },
+  "tables": {
+    "users": {
+      "id": "uuid",
+      "name": "varchar",
+      "email": "varchar",
+      "password_hash": "varchar",
+      "role": "user_role",
+      "created_at": "timestamp",
+      "updated_at": "timestamp",
+      "last_login": "timestamp",
+      "is_active": "boolean",
+      "phone": "varchar",
+      "company": "varchar"
+    },
+    "documents": {
+      "id": "uuid",
+      "user_id": "uuid",
+      "type": "document_type",
+      "raw_file_url": "varchar",
+      "parsed_json": "jsonb",
+      "language": "varchar(2)",
+      "status": "document_status",
+      "created_at": "timestamp",
+      "updated_at": "timestamp",
+      "title": "varchar",
+      "description_raw": "text",
+      "version": "integer",
+      "is_latest": "boolean"
+    },
+    "embeddings": {
+      "id": "uuid",
+      "document_id": "uuid",
+      "embedding": "vector(384)",
+      "model_name": "text",
+      "model_dim": "integer",
+      "is_active": "boolean",
+      "created_at": "timestamp",
+      "updated_at": "timestamp"
+    },
+    "searches": {
+      "id": "uuid",
+      "user_id": "uuid",
+      "query_text": "varchar",
+      "query_vector": "vector(384)",
+      "filters": "jsonb",
+      "type": "search_type",
+      "created_at": "timestamp"
+    },
+    "search_results": {
+      "id": "uuid",
+      "search_id": "uuid",
+      "document_id": "uuid",
+      "score": "double precision",
+      "rank": "integer",
+      "clicked": "boolean",
+      "feedback": "varchar",
+      "created_at": "timestamp"
+    },
+    "alembic_version": {
+      "version_num": "varchar(32)"
+    }
+  },
+  "constraints": [
+    {
+      "table": "documents",
+      "name": "check_status_by_type",
+      "type": "check",
+      "condition": "(type = 'cv' AND status IN ('uploaded', 'parsed', 'parsing_failed', 'embedding_failed')) OR (type = 'jd' AND status IN ('draft', 'open', 'closed'))"
+    },
+    {
+      "table": "documents", 
+      "name": "unique_latest_cv_per_user",
+      "type": "unique_partial",
+      "columns": ["user_id"],
+      "condition": "type = 'cv' AND is_latest = true"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_jd_open",
+      "table": "documents",
+      "columns": ["created_at"],
+      "type": "btree",
+      "condition": "type = 'jd' AND status = 'open'"
+    },
+    {
+      "name": "gin_parsed_json_idx",
+      "table": "documents", 
+      "columns": ["parsed_json"],
+      "type": "gin"
+    },
+    {
+      "name": "embedding_ann_idx",
+      "table": "embeddings",
+      "columns": ["embedding"],
+      "type": "ivfflat",
+      "ops": "vector_cosine_ops",
+      "options": {"lists": 100}
+    },
+    {
+      "name": "user_search_history_idx",
+      "table": "searches",
+      "columns": ["user_id", "created_at"],
+      "type": "btree"
+    },
+    {
+      "name": "search_rank_idx", 
+      "table": "search_results",
+      "columns": ["search_id", "rank"],
+      "type": "btree"
+    }
+  ],
+  "views": [
+    {
+      "name": "cv_documents",
+      "definition": "SELECT * FROM documents WHERE type = 'cv' AND is_latest = true"
+    },
+    {
+      "name": "jd_documents", 
+      "definition": "SELECT * FROM documents WHERE type = 'jd'"
+    }
+  ],
+  "triggers": [
+    {
+      "name": "trigger_cv_latest_management",
+      "table": "documents",
+      "events": ["INSERT", "UPDATE"],
+      "when": "NEW.type = 'cv' AND NEW.is_latest = true",
+      "function": "manage_cv_latest()",
+      "definition": "CREATE OR REPLACE FUNCTION manage_cv_latest() RETURNS TRIGGER AS $$ BEGIN IF NEW.type = 'cv' AND NEW.is_latest = true THEN UPDATE documents SET is_latest = false WHERE user_id = NEW.user_id AND type = 'cv' AND id != NEW.id AND is_latest = true; END IF; RETURN NEW; END; $$ LANGUAGE plpgsql;"
+    }
+  ],
+  "migrations": [
+    {
+      "revision": "001_mvp_update",
+      "description": "Initial MVP schema with documents, embeddings, searches, and basic indexes",
+      "date": "2025-10-02",
+      "status": "applied"
+    },
+    {
+      "revision": "10a4127237bb_add_enum_values_only", 
+      "description": "Add new enum values (parsing_failed, embedding_failed, draft, open, closed) for PostgreSQL compatibility",
+      "date": "2025-10-03",
+      "status": "applied"
+    },
+    {
+      "revision": "a43383a2f45c_002_add_constraints_triggers_indexes",
+      "description": "Add constraints for CV/JD status separation, trigger for is_latest management, optimized indexes",
+      "date": "2025-10-03", 
+      "status": "applied"
+    },
+    {
+      "revision": "249a1c84fd5a_003_remove_deprecated_failed_enum",
+      "description": "Remove deprecated 'failed' enum value as requested by reviewer feedback",
+      "date": "2025-10-03",
+      "status": "applied"
+    }
+  ],
+  "schema_version": "249a1c84fd5a",
+  "last_updated": "2025-10-03T18:30:00Z",
+  "compliance": {
+    "reviewer_feedback": "fully_implemented",
+    "status_separation": "CV (uploaded,parsed,parsing_failed,embedding_failed) vs JD (draft,open,closed)",
+    "trigger_automation": "manage_cv_latest() for automatic is_latest management",
+    "optimized_indexes": "idx_jd_open for open JD documents with created_at",
+    "view_filtering": "cv_documents shows only is_latest=true CVs",
+    "deprecated_values_removed": "failed enum value completely removed"
+  }
+}

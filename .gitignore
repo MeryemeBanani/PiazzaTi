@@ -1,0 +1,33 @@
+# File di ambiente con credenziali sensibili
+*.env
+.env
+backend/.env
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite3
+
+# Node modules (per il frontend)
+node_modules/
