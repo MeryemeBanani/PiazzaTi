@@ -30,6 +30,13 @@ Setup rapido
      DB_NAME=db_PiazzaTi
      DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
 
+   NOTA IMPORTANTE - Conflitto Porte PostgreSQL:
+   Se hai PostgreSQL locale installato (porta 5432), il PostgreSQL Docker è configurato su porta 5433
+   per evitare conflitti. Questo significa:
+   - PostgreSQL locale: localhost:5432 (raccomandato per sviluppo)
+   - PostgreSQL Docker: localhost:5433 (se usi docker-compose up -d postgres)
+   - Modifica DB_PORT nel .env di conseguenza se cambi database
+
 3. Backend
    Opzione A - Con Docker (consigliata per sviluppo, più pulito e semplice):
      docker-compose up --build
@@ -52,12 +59,19 @@ Setup rapido
    - Backend: http://localhost:8000
    - Health check: http://localhost:8000/health
    - Test DB: http://localhost:8000/db-test (deve restituire "database_connected")
+   - Metriche Prometheus: http://localhost:8000/metrics (monitoring P95/P99)
 
-5. Migrazioni database (quando necessario per modificare)
+5. Monitoring Stack (Opzionale - per metriche avanzate)
+   docker-compose up -d prometheus grafana
+   - Prometheus UI: http://localhost:9090
+   - Grafana Dashboard: http://localhost:3000 (admin/admin)
+   - Test metriche: pytest tests/test_metrics.py -v
+
+6. Migrazioni database (quando necessario per modificare)
    cd backend
    alembic upgrade head
 
-6. Frontend (incompleto)
+7. Frontend (incompleto)
    cd frontend
    npm install
    npm start
@@ -266,53 +280,573 @@ Contributi
 3. Fai commit e push (il .env non verrà mai committato)
 4. Apri una pull request
 
-RIEPILOGO IMPLEMENTAZIONE REVIEWER FEEDBACK
-==========================================
+Sistema di Monitoring e Metriche
+=================================
 
-STATUS: COMPLETAMENTE IMPLEMENTATO (2025-10-03)
+IMPLEMENTAZIONE COMPLETA - OpenTelemetry + Prometheus + Grafana
 
-Il progetto ha implementato con successo tutti i requisiti del reviewer feedback:
+Il progetto include un sistema di monitoring avanzato per osservabilità completa dell'applicazione FastAPI.
 
-REQUISITI RICHIESTI E IMPLEMENTAZIONE:
+Stack Tecnologico:
+------------------
+• OpenTelemetry SDK: Raccolta automatica metriche applicazione
+• Prometheus: Storage e query delle metriche con formato standard
+• Grafana: Visualizzazione dashboards e alerting (configurato su porta 3000)
+• FastAPIInstrumentor: Instrumentazione automatica endpoint HTTP
+• SQLAlchemyInstrumentor: Metriche database automatiche
 
-1. SEPARAZIONE STATUS CV/JD
-   - Implementato: Constraint check_status_by_type
-   - CV: uploaded, parsed, parsing_failed, embedding_failed  
-   - JD: draft, open, closed
-   - Validazione: Impossibile assegnare status JD a CV e viceversa
+Architettura del Monitoring:
+----------------------------
+1. GENERAZIONE METRICHE (FastAPI + OpenTelemetry):
+   - app/main.py crea metriche custom con OpenTelemetry SDK
+   - FastAPIInstrumentor genera automaticamente metriche HTTP
+   - Endpoint /metrics espone dati in formato Prometheus
 
-2. GESTIONE AUTOMATICA is_latest
-   - Implementato: Trigger manage_cv_latest()
-   - Funzionalità: Un solo CV per utente automaticamente
-   - Test: Verificato con inserimenti multipli
-   - Robustezza: Gestisce edge cases e operazioni concurrent
+2. RACCOLTA DATI (Prometheus):
+   - Scraping automatico ogni 10 secondi dall'endpoint /metrics
+   - Storage time-series con retention configurabile
+   - Query engine PromQL per analisi avanzate
 
-3. OTTIMIZZAZIONE INDICI JD
-   - Implementato: idx_jd_open su (created_at) WHERE status='open'
-   - Miglioramento: Da 'parsed' a 'open' per JD aperti
-   - Performance: Query 10x più veloci per JD search
+3. VISUALIZZAZIONE (Grafana):
+   - Dashboard personalizzabili
+   - Alerting basato su soglie
+   - Grafici P95/P99, rate, istogrammi
 
-4. AGGIORNAMENTO VIEW cv_documents  
-   - Implementato: Filtro WHERE is_latest=true
-   - Comportamento: Mostra solo CV attivi (non cronologia)
-   - Consistenza: Aggiornamento automatico via trigger
+Metriche Disponibili:
+--------------------
+1. METRICHE PERFORMANCE AUTOMATICHE (P95/P99):
+   - http_server_duration_ms_bucket: Istogrammi latenza richieste HTTP
+   - http_server_response_size_By: Dimensioni response per ottimizzazione bandwidth
+   - http_server_active_requests: Richieste concorrenti in corso
+   - Percentili: P50, P95, P99 automatici per SLA monitoring
 
-5. PULIZIA ENUM DEPRECATED
-   - Implementato: Rimozione completa valore 'failed'
-   - Sostituzione: parsing_failed + embedding_failed
-   - Migrazione: Approccio sicuro con colonna temporanea
+2. METRICHE BUSINESS CUSTOM:
+   - piazzati_custom_requests_1_total: Contatori richieste per endpoint/metodo
+   - piazzati_custom_database_operations_1_total: Operazioni database per tipo
+   - piazzati_custom_request_duration_seconds: Istogrammi durata custom
+   - piazzati_custom_active_users: Gauge utenti attivi
+   - Labels automatici: endpoint, method, status_code per filtraggio granulare
 
-METRICHE DI QUALITÀ:
-- Migrazioni: 4 totali, tutte applicate con successo
-- Test funzionali: Trigger e constraint verificati
-- Performance: Indici ottimizzati per use case produzione
-- Documentazione: Completa con troubleshooting e recovery
+3. METRICHE SISTEMA:
+   - python_gc_*: Garbage collector Python per memory profiling e leak detection
+   - process_*: CPU, memoria, file descriptors per resource monitoring
+   - up: Health check servizi (1=UP, 0=DOWN)
 
-STRUMENTI E PROCESSI:
-- Alembic: Gestione migrazioni versionata
+GUIDA COMPLETA - Come Trovare e Usare le Metriche:
+==================================================
+
+STEP 1: Identificare i Nomi delle Metriche
+------------------------------------------
+I nomi delle metriche in Prometheus possono essere diversi da quelli definiti nel codice
+a causa del processamento OpenTelemetry. Ecco come trovarli:
+
+A) METODO DIRETTO - Endpoint /metrics:
+   URL: http://localhost:8000/metrics
+   
+   Cerca le sezioni che iniziano con "# HELP":
+   ```
+   # HELP piazzati_custom_requests_1_total Total number of requests tracked by custom counter
+   # TYPE piazzati_custom_requests_1_total counter
+   piazzati_custom_requests_1_total{endpoint="/health",method="GET"} 1.0
+   ```
+   
+   NOME DA USARE IN PROMETHEUS: piazzati_custom_requests_1_total
+
+B) METODO PROMETHEUS UI:
+   1. Vai su http://localhost:9090
+   2. Nel campo "Expression" digita le prime lettere: "piazzati"
+   3. Prometheus mostrerà l'autocompletamento con tutti i nomi disponibili
+
+C) PATTERN NAMING OPENTELEMETRY:
+   - Nome nel codice: "piazzati_requests_total"
+   - Nome reale: "piazzati_custom_requests_1_total"
+   - Regola: OpenTelemetry può aggiungere "_1_" per evitare conflitti
+
+STEP 2: Query Base per Prometheus
+----------------------------------
+
+1. VERIFICA CONNETTIVITÀ:
+   ```
+   up
+   ```
+   Risultato atteso: up{instance="piazzati-backend:8000", job="piazzati-backend"} = 1
+
+2. CONTATORI TOTALI:
+   ```
+   piazzati_custom_requests_1_total
+   ```
+   Mostra: Numero cumulativo richieste per endpoint
+
+3. RATE (Richieste al Secondo):
+   ```
+   rate(piazzati_custom_requests_1_total[1m])
+   ```
+   Mostra: Velocità richieste negli ultimi 60 secondi
+
+4. FILTRAGGIO PER ENDPOINT:
+   ```
+   piazzati_custom_requests_1_total{endpoint="/health"}
+   ```
+   Mostra: Solo richieste all'endpoint /health
+
+STEP 3: Query Avanzate per Performance Monitoring
+-------------------------------------------------
+
+1. LATENZA P95 (95% richieste più veloci di questo valore):
+   ```
+   histogram_quantile(0.95, rate(http_server_duration_ms_bucket[5m]))
+   ```
+   
+2. LATENZA P99 (99% richieste più veloci di questo valore):
+   ```
+   histogram_quantile(0.99, rate(http_server_duration_ms_bucket[5m]))
+   ```
+
+3. LATENZA MEDIA:
+   ```
+   rate(http_server_duration_ms_sum[5m]) / rate(http_server_duration_ms_count[5m])
+   ```
+
+4. THROUGHPUT PER ENDPOINT:
+   ```
+   sum by (http_target) (rate(http_server_duration_ms_count[1m]))
+   ```
+
+5. TOP 5 ENDPOINT PIÙ UTILIZZATI:
+   ```
+   topk(5, sum by (http_target) (rate(http_server_duration_ms_count[5m])))
+   ```
+
+6. SUCCESS RATE PERCENTUALE:
+   ```
+   (rate(http_server_duration_ms_count{http_status_code="200"}[5m]) / 
+    rate(http_server_duration_ms_count[5m])) * 100
+   ```
+
+STEP 4: Interpretazione Risultati
+----------------------------------
+
+A) VALORI PERFORMANCE:
+   - P95 < 100ms: Eccellente 
+   - P95 < 500ms: Buono 
+   - P95 < 1000ms: Accettabile 
+   - P95 > 1000ms: Problematico 
+
+B) LETTURA RATE:
+   - rate() = 0.5 significa 0.5 richieste/secondo (30 al minuto)
+   - rate() = 0 può indicare assenza di traffico o problemi
+
+C) INTERPRETAZIONE CONTATORI:
+   - I contatori sono cumulativi (sempre crescenti)
+   - Per velocità istantanea usare sempre rate()
+
+D) TROUBLESHOOTING:
+   - up = 0: Servizio irraggiungibile, controllare container e rete
+   - Empty query result: Verificare nome metrica e spelling
+   - Nessun dato: Attendere 10-15 secondi per primo scraping
+
+Accesso alle Metriche:
+---------------------
+• Endpoint Prometheus RAW: http://localhost:8000/metrics
+• Health Check: http://localhost:8000/health
+• Prometheus Server: http://localhost:9090 (quando Docker attivo)
+• Grafana Dashboard: http://localhost:3000 (admin/admin)
+
+Configurazione Porte Docker:
+-----------------------------
+IMPORTANTE - Risoluzione Conflitti Porte:
+
+Il docker-compose.yml è configurato per evitare conflitti con servizi locali:
+
+• PostgreSQL Docker: 5433:5432 (invece di 5432:5432)
+  Motivo: Evita conflitto con PostgreSQL locale su porta 5432
+  Per connessione Docker: psql -h localhost -p 5433 -U piazzati_user
+
+• Prometheus: 9090:9090 (standard)
+• Grafana: 3000:3000 (standard)
+• Backend: 8000:8000 (standard)
+
+Setup Monitoring Stack:
+-----------------------
+1. Avvio Solo Monitoring (PostgreSQL locale):
+   docker-compose up -d prometheus grafana
+   
+2. Avvio Stack Completo (PostgreSQL Docker):
+   docker-compose up -d
+   
+3. Test Metriche:
+   curl http://localhost:8000/metrics
+   pytest tests/test_metrics.py -v
+
+4. Generazione Traffico per Test:
+   # Windows PowerShell
+   for ($i=1; $i -le 10; $i++) { 
+     Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing | Out-Null
+     Start-Sleep 1 
+   }
+
+File di Configurazione:
+----------------------
+• monitoring/prometheus.yml: Config scraping endpoints e intervalli
+• monitoring/grafana/: Dashboards e provisioning automatico
+• tests/test_metrics.py: Test automatizzati per validazione metriche
+• app/main.py: Setup OpenTelemetry con PrometheusMetricReader
+
+Validazione e Testing:
+---------------------
+Il sistema include test automatizzati completi per validare il monitoring:
+
+• test_health_endpoint: Verifica applicazione attiva
+• test_metrics_endpoint: Valida formato Prometheus corretto 
+• test_multiple_requests_generate_metrics: Conferma incremento metriche
+• pytest configuration: Scoperta automatica in tests/ directory
+
+Comandi di validazione:
+```bash
+# Test suite completa
+pytest tests/test_metrics.py -v
+
+# Verifica endpoint metriche
+curl http://localhost:8000/metrics | grep "piazzati_custom"
+
+# Check Prometheus targets
+curl http://localhost:9090/api/v1/targets
+```
+
+Utilizzo in Produzione:
+----------------------
+• Metriche P95/P99: Monitoring SLA e performance degradation detection
+• Alert Grafana: Configurabili su soglie latenza/errori con notifiche
+• Retention: Prometheus configurato per storage a lungo termine (15 giorni default)
+• Scalabilità: OpenTelemetry supporta export verso sistemi esterni (Jaeger, Zipkin)
+• Dashboard: Template Grafana per FastAPI inclusi in monitoring/grafana/dashboards/
+
+Best Practices per Query:
+-------------------------
+1. Usa sempre rate() per contatori invece dei valori assoluti
+2. Scegli intervalli temporali appropriati: [1m] per real-time, [5m] per trend
+3. Filtra per endpoint specifici per analisi granulari
+4. Combina metriche business con metriche sistema per diagnosi complete
+5. Imposta alert su P95/P99 piuttosto che su latenza media (può essere fuorviante)
 - PostgreSQL: Enum, trigger, constraint, indici parziali
 - Testing: Validazione funzionale con dati reali
 - Documentation: Cronologia completa e troubleshooting
 
 Il sistema è ora production-ready con automazione completa della business logic 
 a livello database e performance ottimizzate per i pattern di query previsti.
+
+DOCUMENTAZIONE TECNICA DETTAGLIATA - MONITORING IMPLEMENTATION
+===============================================================
+
+# PiazzaTi Monitoring Implementation - Full Stack
+
+Overview
+Implementazione completa di monitoring e observability per il backend PiazzaTi utilizzando Prometheus e OpenTelemetry, con esposizione di metriche avanzate e postgres_exporter per il monitoraggio del database.
+
+Obiettivi Completati
+
+1. Strumentazione OpenTelemetry in FastAPI
+- **Automatic Instrumentation**: FastAPI, SQLAlchemy, Psycopg2
+- **Custom Metrics**: Request counting, duration histograms, database operations
+- **Middleware**: Automatic request tracking e metric collection
+
+2. Endpoint /metrics con Metriche Avanzate
+- **URL**: `http://localhost:8000/metrics`
+- **Formato**: Prometheus standard (text/plain)
+- **Metriche Esposte**:
+  - `piazzati_requests_total{endpoint, method}` - Contatore richieste per endpoint
+  - `piazzati_request_duration_seconds` - Istogramma durata richieste (per p95/p99)
+  - `piazzati_database_operations_total{operation}` - Operazioni database
+  - `piazzati_active_users` - Utenti attivi (up-down counter)
+
+3. PostgreSQL Exporter
+- **Container**: `prometheuscommunity/postgres-exporter:v0.15.0`
+- **Port**: 9187
+- **Metriche DB**: Connessioni, query performance, statistiche tabelle
+
+4. Stack di Monitoring Completo
+- **Prometheus**: Raccolta metriche (porta 9090)
+- **Grafana**: Visualizzazione (porta 3000, admin/admin)
+- **Dashboard**: Pre-configurato con metriche chiave
+
+File Implementati
+
+### Dependencies (requirements.txt)
+```txt
+# Monitoring e Observability
+prometheus-client==0.19.0
+opentelemetry-api==1.21.0
+opentelemetry-sdk==1.21.0
+opentelemetry-instrumentation==0.42b0
+opentelemetry-instrumentation-fastapi==0.42b0
+opentelemetry-instrumentation-sqlalchemy==0.42b0
+opentelemetry-instrumentation-psycopg2==0.42b0
+opentelemetry-exporter-prometheus==0.42b0
+```
+
+### FastAPI Main App (app/main.py)
+- OpenTelemetry setup automatico
+- Prometheus metrics endpoint
+- Custom business metrics
+- Instrumentation di database e HTTP requests
+
+### Docker Compose (docker-compose.yml)
+- PostgreSQL database con health checks
+- Backend FastAPI con dipendenze
+- PostgreSQL Exporter per metriche DB
+- Prometheus server con configurazione
+- Grafana con dashboard pre-configurato
+
+### Monitoring Configuration
+- `monitoring/prometheus.yml` - Configurazione Prometheus
+- `monitoring/grafana/` - Configurazione Grafana e dashboard
+
+Come Utilizzare
+
+### 1. Avvio Stack Completo
+```bash
+cd C:\Users\Merye\Desktop\LA_PIAZZA\PiazzaTi
+docker-compose up -d
+```
+
+### 2. Accesso Servizi
+- **Backend API**: http://localhost:8000
+- **Metrics**: http://localhost:8000/metrics
+- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3000 (admin/admin)
+- **PostgreSQL Exporter**: http://localhost:9187/metrics
+
+### 3. Test Funzionalità
+```bash
+cd backend
+python run_monitoring_test.py
+```
+
+Metriche Chiave Disponibili
+
+### Application Metrics
+- **Latenza P95/P99**: `histogram_quantile(0.95, rate(piazzati_request_duration_seconds_bucket[5m]))`
+- **Throughput**: `rate(piazzati_requests_total[5m])`
+- **Error Rate**: Tramite status code labeling
+- **Database Operations**: `rate(piazzati_database_operations_total[5m])`
+
+### Database Metrics (PostgreSQL Exporter)
+- **Connessioni**: `pg_stat_database_numbackends`
+- **Query Performance**: `pg_stat_database_tup_fetched`, `pg_stat_database_tup_inserted`
+- **Locks**: `pg_locks_count`
+- **Cache Hit Ratio**: `pg_stat_database_blks_hit / (pg_stat_database_blks_hit + pg_stat_database_blks_read)`
+
+### System Metrics (Automatiche)
+- **Python GC**: `python_gc_collections_total`
+- **Memory**: `python_memory_bytes`
+- **Process**: `process_cpu_seconds_total`
+
+Dashboard Grafana
+
+### Pannelli Implementati
+1. **Request Rate** - Richieste al secondo
+2. **Response Time P95** - Latenza 95° percentile
+3. **Response Time P99** - Latenza 99° percentile  
+4. **Database Operations** - Operazioni DB al secondo
+5. **PostgreSQL Connections** - Connessioni attive al DB
+6. **Query Performance** - Performance query database
+
+### Cosa Mostra Grafana - Guida Dettagliata
+
+**ACCESSO ALLA DASHBOARD:**
+- URL: http://localhost:3000
+- Username: admin
+- Password: password (o quella configurata)
+- Dashboard: "PiazzaTi Monitoring Dashboard"
+- URL Diretto: http://localhost:3000/d/[UID]/piazzati-monitoring-dashboard
+
+**PANNELLO 1: REQUEST RATE**
+- **Cosa Mostra**: Numero di richieste HTTP al secondo ricevute dal backend
+- **Metrica Utilizzata**: `rate(piazzati_custom_requests_1_total[5m])`
+- **Implementazione**: Contatore custom in `app/main.py` linee 56-60, utilizzato negli endpoint
+- **Interpretazione**: 
+  - Valore normale: 0.1-10 req/sec per sviluppo
+  - Picchi indicano traffico intenso
+  - Zero costante indica problemi di connettività
+- **Codice Sorgente**: `request_count.add(1, {"endpoint": "/health", "method": "GET"})` negli endpoint
+
+**PANNELLO 2: RESPONSE TIME P95**
+- **Cosa Mostra**: 95% delle richieste completate entro questo tempo (millisecondi)
+- **Metrica Utilizzata**: `histogram_quantile(0.95, rate(http_server_duration_ms_bucket[5m]))`
+- **Implementazione**: Automatica tramite FastAPIInstrumentor (linea 51 main.py)
+- **Interpretazione**:
+  - Ottimo: < 100ms
+  - Buono: < 500ms
+  - Accettabile: < 1000ms
+  - Problematico: > 1000ms
+- **SLA**: Utile per definire Service Level Agreements
+
+**PANNELLO 3: RESPONSE TIME P99**
+- **Cosa Mostra**: 99% delle richieste completate entro questo tempo (millisecondi)
+- **Metrica Utilizzata**: `histogram_quantile(0.99, rate(http_server_duration_ms_bucket[5m]))`
+- **Implementazione**: Automatica tramite FastAPIInstrumentor
+- **Interpretazione**:
+  - Sempre maggiore di P95
+  - Rivela outliers e richieste più lente
+  - Importante per identificare problemi di performance
+- **Alert**: Configurare alert se P99 > 2000ms
+
+**PANNELLO 4: DATABASE OPERATIONS**
+- **Cosa Mostra**: Operazioni database eseguite al secondo
+- **Metrica Utilizzata**: `rate(piazzati_custom_database_operations_1_total[5m])`
+- **Implementazione**: Contatore custom in `app/main.py` linee 66-70
+- **Utilizzo**: 
+  - `/db-test` endpoint: `database_operations.add(1, {"operation": "test_query"})`
+  - Errori: `database_operations.add(1, {"operation": "test_query_error"})`
+- **Interpretazione**:
+  - Correlato con Request Rate
+  - Picchi senza Request Rate = batch jobs
+  - Zero con traffico = problemi DB
+
+**PANNELLO 5: POSTGRESQL CONNECTIONS**
+- **Cosa Mostra**: Numero di connessioni attive al database PostgreSQL
+- **Metrica Utilizzata**: `pg_stat_database_numbackends{datname="db_piazzati"}`
+- **Implementazione**: Postgres Exporter (container separato, porta 9187)
+- **Interpretazione**:
+  - Normale: 1-10 per sviluppo
+  - Limite PostgreSQL default: 100 connessioni
+  - Alert se > 80% del limite
+- **Troubleshooting**: Connessioni elevate = connection leaks
+
+**PANNELLO 6: QUERY PERFORMANCE**
+- **Cosa Mostra**: Tuples (righe) fetched e inserted al secondo
+- **Metriche Utilizzate**:
+  - `rate(pg_stat_database_tup_fetched{datname="db_piazzati"}[5m])` - Letture
+  - `rate(pg_stat_database_tup_inserted{datname="db_piazzati"}[5m])` - Scritture
+- **Implementazione**: Postgres Exporter (statistiche native PostgreSQL)
+- **Interpretazione**:
+  - Fetched: Query SELECT, JOIN, ricerche
+  - Inserted: INSERT, operazioni di scrittura
+  - Ratio alto Fetched/Inserted = applicazione read-heavy
+
+**CODICE SORGENTE DELLE METRICHE:**
+
+Tutte le metriche custom sono implementate in `backend/app/main.py`:
+
+```python
+# Definizione metriche (linee 56-74)
+request_count = meter.create_counter("piazzati_custom_requests_total", ...)
+database_operations = meter.create_counter("piazzati_custom_database_operations_total", ...)
+
+# Utilizzo negli endpoint
+@app.get("/health")
+async def health_check():
+    request_count.add(1, {"endpoint": "/health", "method": "GET"})  # Incrementa contatore
+    
+@app.get("/db-test") 
+async def test_database_connection(db: Session = Depends(get_db)):
+    request_count.add(1, {"endpoint": "/db-test", "method": "GET"})
+    database_operations.add(1, {"operation": "test_query"})  # Traccia operazione DB
+```
+
+**COME INTERPRETARE I DATI:**
+
+1. **Correlazioni Normali**:
+   - Request Rate ↑ → Response Time ↑ (carico)
+   - Request Rate ↑ → Database Operations ↑ (logico)
+   - Database Operations ↑ → PostgreSQL Connections ↑ (normale)
+
+2. **Anomalie da Investigare**:
+   - Response Time alto con Request Rate basso = problemi performance
+   - Database Operations zero con Request Rate > 0 = problemi connettività DB
+   - PostgreSQL Connections crescenti senza Request Rate = connection leaks
+
+3. **Baseline per Alerts**:
+   - P95 > 500ms: Warning
+   - P99 > 1000ms: Critical
+   - PostgreSQL Connections > 50: Warning
+   - Request Rate = 0 per > 5min: Critical (se aspettato traffico)
+
+**REFRESH E TIME RANGE:**
+- Dashboard refresh automatico ogni 30 secondi
+- Time range default: ultima 1 ora
+- Modificabile dall'interfaccia Grafana (top-right)
+
+### Queries PromQL Chiave
+```promql
+# Request rate
+rate(piazzati_requests_total[5m])
+
+# P95 latency
+histogram_quantile(0.95, rate(piazzati_request_duration_seconds_bucket[5m]))
+
+# P99 latency
+histogram_quantile(0.99, rate(piazzati_request_duration_seconds_bucket[5m]))
+
+# Database operations
+rate(piazzati_database_operations_total[5m])
+
+# PostgreSQL connections
+pg_stat_database_numbackends{datname="db_piazzati"}
+```
+
+Test e Validazione
+
+Test Completati
+1. **Endpoint Health**: Risposta 200 OK
+2. **Endpoint Metrics**: Formato Prometheus corretto
+3. **Request Counting**: Metriche per endpoint/method
+4. **Duration Histograms**: P95/P99 calculation ready
+5. **Custom Metrics**: Business logic tracking
+6. **Docker Compose**: Stack completo configurato
+
+### Esempio Output Metrics
+```
+# HELP piazzati_requests_total Total number of requests
+# TYPE piazzati_requests_total counter
+piazzati_requests_total{endpoint="/health",method="GET"} 15.0
+
+# HELP piazzati_request_duration_seconds Request duration in seconds
+# TYPE piazzati_request_duration_seconds histogram
+piazzati_request_duration_seconds_bucket{le="0.005"} 10.0
+piazzati_request_duration_seconds_bucket{le="0.01"} 12.0
+piazzati_request_duration_seconds_bucket{le="+Inf"} 15.0
+```
+
+Configurazione Avanzata
+
+### Personalizzazione Metriche
+Per aggiungere nuove metriche business-specific:
+
+```python
+# In app/main.py
+custom_metric = meter.create_counter(
+    "piazzati_custom_operations_total",
+    description="Custom business operations",
+    unit="1"
+)
+
+# Utilizzo
+custom_metric.add(1, {"operation": "document_upload", "user_type": "premium"})
+```
+
+### Alerting (Opzionale)
+Aggiungere file `alert_rules.yml` per configurare alerting automatico su:
+- Latenza P99 > 500ms
+- Error rate > 5%
+- Database connections > 80% della capacity
+
+Benefici Implementazione
+
+1. **Observability Completa**: Visibilità end-to-end dell'applicazione
+2. **Performance Monitoring**: P95/P99 latency tracking
+3. **Database Insights**: Metriche dettagliate PostgreSQL
+4. **Production Ready**: Setup industriale con Grafana
+5. **Scalabilità**: Metrics collection ottimizzata
+6. **Troubleshooting**: Debug facilitato con metriche granulari
+
+Risultato Finale
+
+**Monitoring Stack Completo Implementato**
+- FastAPI con OpenTelemetry instrumentation
+- Endpoint /metrics con formato Prometheus
+- PostgreSQL exporter per metriche database
+- Grafana dashboard con visualizzazioni avanzate
+- Docker Compose per deployment semplificato
+
+Il sistema è ora production-ready per monitoring e observability completa!

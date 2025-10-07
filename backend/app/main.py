@@ -5,20 +5,98 @@ from app.database import get_db
 from dotenv import load_dotenv
 import os
 
+# OpenTelemetry imports
+from opentelemetry import trace, metrics
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.semconv.resource import ResourceAttributes
+from opentelemetry.exporter.prometheus import PrometheusMetricReader
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
+from prometheus_client import start_http_server, CONTENT_TYPE_LATEST, generate_latest
+
 # Carica le variabili dal file .env
 load_dotenv()
 
+# Setup OpenTelemetry con Resource configurato
+resource = Resource.create({
+    ResourceAttributes.SERVICE_NAME: "piazzati-backend",
+    ResourceAttributes.SERVICE_VERSION: "1.0.0",
+})
+
+prometheus_reader = PrometheusMetricReader(
+    disable_target_info=True  # Disabilita target_info che causa problemi di parsing
+) #raccoglie metriche in formato compatibile con Prometheus
+meter_provider = MeterProvider(
+    metric_readers=[prometheus_reader],
+    resource=resource
+) #gestore metriche
+metrics.set_meter_provider(meter_provider) #imposto il provider globale
+
+tracer_provider = TracerProvider() #tracce, ovvero come le richieste si propagano nell'app
+trace.set_tracer_provider(tracer_provider) #imposto il provider globale
+
+
+# Get meter and tracer dal modulo corrente "__name__"
+meter = metrics.get_meter(__name__)
+tracer = trace.get_tracer(__name__)
+
+#creo l'app FastAPI
 app = FastAPI(title="PiazzaTi Backend", version="1.0.0")
 
+# Instrument FastAPI automatically (per tracciare le richieste)
+FastAPIInstrumentor.instrument_app(app)
+SQLAlchemyInstrumentor().instrument()
+Psycopg2Instrumentor().instrument()
 
+# metriche personalizzate:
+request_count = meter.create_counter(
+    "piazzati_custom_requests_total",
+    description="Total number of requests tracked by custom counter",
+    unit="1"
+)
+
+request_duration = meter.create_histogram(
+    "piazzati_custom_request_duration_seconds",
+    description="Request duration in seconds tracked by custom histogram",
+    unit="s"
+)
+
+database_operations = meter.create_counter(
+    "piazzati_custom_database_operations_total",
+    description="Total number of database operations tracked by custom counter",
+    unit="1"
+)
+
+active_users = meter.create_up_down_counter(
+    "piazzati_custom_active_users",
+    description="Number of active users tracked by custom counter",
+    unit="1"
+)
+
+#creazione endpoint e gestione metriche 
 @app.get("/")
 async def root():
+    request_count.add(1, {"endpoint": "/", "method": "GET"})
     return {"message": "PiazzaTi Backend API"}
+
+
+@app.get("/metrics")
+async def get_metrics():
+    """Endpoint per le metriche Prometheus"""
+    from fastapi import Response
+    data = generate_latest()
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/health")
 async def health_check():
     """Endpoint per verificare lo stato dell'applicazione"""
+    request_count.add(1, {"endpoint": "/health", "method": "GET"})
     database_url = os.getenv("DATABASE_URL")
     return {
         "status": "healthy",
@@ -31,9 +109,13 @@ async def health_check():
 @app.get("/db-test")
 async def test_database_connection(db: Session = Depends(get_db)):
     """Endpoint per testare la connessione al database"""
+    request_count.add(1, {"endpoint": "/db-test", "method": "GET"})
+    
     try:
         # Esegui una query semplice per testare la connessione
+        database_operations.add(1, {"operation": "test_query"})
         db.execute(text("SELECT 1"))
         return {"status": "database_connected", "result": "OK"}
     except Exception as e:
+        database_operations.add(1, {"operation": "test_query_error"})
         return {"status": "database_error", "error": str(e)}

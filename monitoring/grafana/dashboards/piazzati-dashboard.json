@@ -1,0 +1,113 @@
+{
+  "id": null,
+  "title": "PiazzaTi Monitoring Dashboard",
+  "tags": ["piazzati"],
+  "style": "dark",
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "rate(piazzati_custom_requests_1_total[5m])",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Response Time P95",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_server_duration_ms_bucket[5m]))",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Response Time P99",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(http_server_duration_ms_bucket[5m]))",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Database Operations",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "rate(piazzati_custom_database_operations_1_total[5m])",
+          "refId": "A",
+          "legendFormat": "DB Operations/sec"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+    },
+    {
+      "id": 5,
+      "title": "PostgreSQL Connections",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "pg_stat_database_numbackends{datname=\"db_piazzati\"}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Query Performance",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "rate(pg_stat_database_tup_fetched{datname=\"db_piazzati\"}[5m])",
+          "refId": "A",
+          "legendFormat": "Tuples Fetched/sec"
+        },
+        {
+          "expr": "rate(pg_stat_database_tup_inserted{datname=\"db_piazzati\"}[5m])",
+          "refId": "B",
+          "legendFormat": "Tuples Inserted/sec"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+    }
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "30s"
+}

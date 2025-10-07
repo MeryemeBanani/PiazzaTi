@@ -1,4 +1,24 @@
 services:
+
+  # Database PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: piazzati-postgres
+    environment:
+      POSTGRES_DB: db_piazzati
+      POSTGRES_USER: piazzati_user
+      POSTGRES_PASSWORD: piazzati_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U piazzati_user -d db_piazzati"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend FastAPI
   piazzati-backend:
     build: ./backend
     env_file:
@@ -8,4 +28,60 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # PostgreSQL Exporter per metriche database
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: piazzati-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://piazzati_user:piazzati_password@postgres:5432/db_piazzati?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # Prometheus per raccolta metriche
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: piazzati-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - piazzati-backend
+      - postgres-exporter
+    restart: unless-stopped
+
+  # Grafana per visualizzazione metriche
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: piazzati-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
 
