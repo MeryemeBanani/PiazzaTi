@@ -1,45 +1,39 @@
-from sqlalchemy import (
-    Column, String, Text, Integer, Boolean, DateTime,
-    ForeignKey, CheckConstraint
-)
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship
-import uuid
+from typing import Optional
 import datetime
+import uuid
 
-from app.models.base import Base
-from app.models.enums import document_status_enum, document_type_enum
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, String, Text, Uuid, text, Enum
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from .base import Base
 
 
 class Document(Base):
-    __tablename__ = "documents"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True),
-                     ForeignKey("users.id", ondelete="CASCADE"))
-    type = Column(document_type_enum)
-    raw_file_url = Column(String)
-    parsed_json = Column(JSONB)
-    language = Column(String(2))  # Normalizzato a 2 caratteri
-    status = Column(document_status_enum)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    # Campi aggiuntivi per MVP
-    title = Column(String)
-    description_raw = Column(Text)
-    version = Column(Integer)
-    is_latest = Column(Boolean, default=False)
-
-    # Relazioni
-    user = relationship("User", back_populates="documents")
-    embedding = relationship("Embedding", uselist=False,
-                             back_populates="document")
-    search_results = relationship("SearchResult", back_populates="document")
-
+    __tablename__ = 'documents'
     __table_args__ = (
-        CheckConstraint(
-            "status IN ('uploaded', 'parsed', 'failed')",
-            name="check_status_valid"
-        ),
+        CheckConstraint("language::text ~ '^[a-z]{2}$'::text", name='check_language_format'),
+        ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE', name='documents_user_id_fkey'),
+        PrimaryKeyConstraint('id', name='documents_pkey'),
+        Index('gin_parsed_json_idx', 'parsed_json'),
+        Index('idx_jd_open_lang', 'language', 'created_at'),
+        Index('unique_latest_cv_per_user', 'user_id', unique=True)
     )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    is_latest: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text('false'))
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    type: Mapped[Optional[str]] = mapped_column(Enum('cv', 'jd', name='document_type'))
+    raw_file_url: Mapped[Optional[str]] = mapped_column(String)
+    parsed_json: Mapped[Optional[dict]] = mapped_column(JSONB)
+    language: Mapped[Optional[str]] = mapped_column(String(2))
+    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
+    updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
+    title: Mapped[Optional[str]] = mapped_column(String)
+    description_raw: Mapped[Optional[str]] = mapped_column(Text)
+    version: Mapped[Optional[int]] = mapped_column(Integer)
+    status: Mapped[Optional[str]] = mapped_column(Enum('uploaded', 'parsed', 'parsing_failed', 'embedding_failed', 'draft', 'open', 'closed', name='document_status'))
+
+    # Relationships
+    user: Mapped[Optional['User']] = relationship('User', back_populates='documents')
+    embedding: Mapped[Optional['Embedding']] = relationship('Embedding', uselist=False, back_populates='document')
+    search_results: Mapped[list['SearchResult']] = relationship('SearchResult', back_populates='document')

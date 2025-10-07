@@ -1,8 +1,8 @@
 services:
 
-  # Database PostgreSQL
+  # Database PostgreSQL con pgvector
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: piazzati-postgres
     environment:
       POSTGRES_DB: db_piazzati
