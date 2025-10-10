@@ -2,6 +2,12 @@
 *.env
 .env
 backend/.env
+.env.prod
+configs/production-credentials.txt
+ssl/production/
+configs/*-security.env
+configs/app-security.env
+configs/grafana-security.env
 
 # Cache Python
 __pycache__/

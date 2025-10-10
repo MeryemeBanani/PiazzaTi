@@ -1,0 +1,225 @@
+# =============================================================================
+# PIAZZATI PRODUCTION SECURITY CONFIGURATION
+# =============================================================================
+# Docker Compose override per security hardening in produzione
+# Usage: docker-compose -f docker-compose.prod.yml -f docker-compose.security.yml up
+# =============================================================================
+
+version: '3.8'
+
+services:
+  backend:
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:unconfined
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=200m
+      - /var/run:noexec,nosuid,size=100m
+    environment:
+      # Security headers
+      - SECURITY_HSTS_MAX_AGE=31536000
+      - SECURITY_CONTENT_TYPE_OPTIONS=nosniff
+      - SECURITY_FRAME_OPTIONS=DENY
+      - SECURITY_XSS_PROTECTION=1; mode=block
+      - SECURITY_REFERRER_POLICY=strict-origin-when-cross-origin
+      
+      # Rate limiting
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=60
+      - RATE_LIMIT_REQUESTS_PER_HOUR=1000
+      
+      # Session security
+      - SESSION_COOKIE_SECURE=true
+      - SESSION_COOKIE_HTTPONLY=true
+      - SESSION_COOKIE_SAMESITE=strict
+    volumes:
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - backend_logs:/var/log/piazzati
+    user: "10001:10001"  # Non-root user
+    
+  grafana:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /var/run:noexec,nosuid,size=50m
+    environment:
+      # Security configuration
+      - GF_SECURITY_DISABLE_GRAVATAR=true
+      - GF_SECURITY_COOKIE_SECURE=true
+      - GF_SECURITY_COOKIE_SAMESITE=strict
+      - GF_SECURITY_CONTENT_TYPE_PROTECTION_HEADER=true
+      - GF_SECURITY_X_CONTENT_TYPE_OPTIONS=nosniff
+      - GF_SECURITY_X_XSS_PROTECTION=true
+      - GF_SECURITY_STRICT_TRANSPORT_SECURITY=true
+      - GF_SECURITY_STRICT_TRANSPORT_SECURITY_MAX_AGE_SECONDS=86400
+      
+      # Authentication
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_ALLOW_ORG_CREATE=false
+      
+      # Server security
+      - GF_SERVER_ENFORCE_DOMAIN=true
+      - GF_SERVER_DOMAIN=grafana.piazzati.yourdomain.com
+      - GF_SERVER_ROOT_URL=https://grafana.piazzati.yourdomain.com:3000
+    volumes:
+      - grafana_data_secure:/var/lib/grafana
+      - grafana_logs:/var/log/grafana
+    user: "472:472"  # Grafana user
+    
+  prometheus:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=200m
+    environment:
+      - PROMETHEUS_RETENTION_TIME=30d
+      - PROMETHEUS_RETENTION_SIZE=10GB
+    volumes:
+      - prometheus_data_secure:/prometheus
+      - prometheus_config_secure:/etc/prometheus:ro
+      - prometheus_logs:/var/log/prometheus
+    user: "65534:65534"  # Nobody user
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--web.external-url=http://prometheus:9090'
+      - '--web.listen-address=0.0.0.0:9090'
+      - '--log.level=warn'
+      
+  nginx:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - DAC_OVERRIDE
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:noexec,nosuid,size=100m
+      - /var/run:noexec,nosuid,size=50m
+      - /tmp:noexec,nosuid,size=50m
+    volumes:
+      - ./nginx/nginx.security.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl/production:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    user: "101:101"  # Nginx user
+    
+  # Security monitoring container
+  security-monitor:
+    image: alpine:latest
+    container_name: piazzati-security-monitor
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m
+    environment:
+      - MONITOR_INTERVAL=300  # 5 minutes
+    volumes:
+      - ./scripts:/scripts:ro
+      - backend_logs:/logs/backend:ro
+      - grafana_logs:/logs/grafana:ro
+      - prometheus_logs:/logs/prometheus:ro
+      - nginx_logs:/logs/nginx:ro
+    command: >
+      sh -c "
+        apk add --no-cache curl jq logrotate;
+        while true; do
+          echo 'Security monitoring check at $(date)';
+          if [ -f /logs/backend/error.log ]; then
+            ERRORS=$$(tail -100 /logs/backend/error.log | grep -i 'error\|fail\|unauthorized' | wc -l);
+            if [ $$ERRORS -gt 10 ]; then
+              echo 'ALERT: High error rate detected in backend logs';
+            fi;
+          fi;
+          if [ -f /logs/nginx/access.log ]; then
+            ATTACKS=$$(tail -1000 /logs/nginx/access.log | grep -E '(sql|script|union|select|drop|insert|update|delete)' | wc -l);
+            if [ $$ATTACKS -gt 5 ]; then
+              echo 'ALERT: Potential SQL injection/XSS attacks detected';
+            fi;
+          fi;
+          sleep $$MONITOR_INTERVAL;
+        done
+      "
+    depends_on:
+      - backend
+      - grafana
+      - prometheus
+      - nginx
+    networks:
+      - piazzati_network
+    restart: unless-stopped
+
+volumes:
+  grafana_data_secure:
+    name: piazzati_grafana_data_secure
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/piazzati/data/grafana
+      
+  prometheus_data_secure:
+    name: piazzati_prometheus_data_secure
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/piazzati/data/prometheus
+      
+  prometheus_config_secure:
+    name: piazzati_prometheus_config_secure
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/piazzati/configs/prometheus
+      
+  backend_logs:
+    name: piazzati_backend_logs
+    
+  grafana_logs:
+    name: piazzati_grafana_logs
+    
+  prometheus_logs:
+    name: piazzati_prometheus_logs
+    
+  nginx_logs:
+    name: piazzati_nginx_logs
+
+networks:
+  piazzati_network:
+    name: piazzati_secure_network
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: piazzati0
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1

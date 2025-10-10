@@ -68,12 +68,248 @@ Setup rapido
    - 26 constraint di integrità applicati
    - 15 indici per performance (inclusi IVFFlat per vector search)
 
-5. Monitoring Stack (Incluso automaticamente)
+5. Monitoring Stack (Sistema Completo di Monitoraggio)
    docker-compose up -d
-   - Prometheus UI: http://localhost:9090
-   - Grafana Dashboard: http://localhost:3000 (admin/password)
-   - PostgreSQL Exporter: http://localhost:9187/metrics
-   - Test metriche: pytest backend/tests/test_metrics.py -v
+   
+   COMPONENTI INCLUSI:
+   - Prometheus: Raccolta metriche (http://localhost:9090)
+   - Grafana: Visualizzazione dashboard (http://localhost:3000 - admin/password)
+   - Node Exporter: Metriche sistema operativo (http://localhost:9100/metrics)
+   - cAdvisor: Metriche container Docker (http://localhost:8080)
+   - PostgreSQL Exporter: Metriche database (http://localhost:9187/metrics)
+   - Backend FastAPI: Metriche applicazione (http://localhost:8000/metrics)
+   
+   DASHBOARD GRAFANA ORGANIZZAZIONE (3 RIGHE) - FONTE METRICHE:
+   
+   Prima Riga - Metriche Performance API:
+   • Request Rate: Richieste al secondo 
+     └── Query: rate(piazzati_custom_requests_1_total[5m])
+     └── Fonte: FastAPI Backend (/metrics endpoint) - Metrica custom
+     └── Exporter: piazzati-backend:8000/metrics
+   
+   • Response Time P95: 95° percentile tempi risposta
+     └── Query: histogram_quantile(0.95, rate(http_server_duration_ms_bucket[5m]))
+     └── Fonte: FastAPI Backend (/metrics endpoint) - OpenTelemetry instrumentation
+     └── Exporter: piazzati-backend:8000/metrics
+   
+   • Response Time P99: 99° percentile tempi risposta
+     └── Query: histogram_quantile(0.99, rate(http_server_duration_ms_bucket[5m]))
+     └── Fonte: FastAPI Backend (/metrics endpoint) - OpenTelemetry instrumentation
+     └── Exporter: piazzati-backend:8000/metrics
+   
+   Seconda Riga - Metriche Sistema e Applicazione:
+   • CPU Sistema %: Carico complessivo virtual machine
+     └── Query: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+     └── Fonte: Node Exporter - Metriche sistema operativo host
+     └── Exporter: node-exporter:9100/metrics
+   
+   • CPU App %: Utilizzo CPU specifico processo PiazzaTi
+     └── Query: rate(process_cpu_seconds_total{job="piazzati-backend"}[5m]) * 100
+     └── Fonte: FastAPI Backend - Metriche processo Python
+     └── Exporter: piazzati-backend:8000/metrics
+   
+   • RAM App MB: Memoria residente applicazione PiazzaTi
+     └── Query: process_resident_memory_bytes{job="piazzati-backend"} / (1024 * 1024)
+     └── Fonte: FastAPI Backend - Metriche processo Python
+     └── Exporter: piazzati-backend:8000/metrics
+   
+   Terza Riga - Metriche Database e Monitoraggio Avanzato:
+   • Database Operations: Operazioni database/sec custom
+     └── Query: rate(piazzati_custom_database_operations_1_total[5m])
+     └── Fonte: FastAPI Backend - Metrica custom incrementata ad ogni query
+     └── Exporter: piazzati-backend:8000/metrics
+   
+   • Query Performance: Tuple fetch/insert PostgreSQL native
+     └── Query A: rate(pg_stat_database_tup_fetched{datname="db_piazzati"}[5m])
+     └── Query B: rate(pg_stat_database_tup_inserted{datname="db_piazzati"}[5m])
+     └── Fonte: PostgreSQL Exporter - Statistiche native pg_stat_database
+     └── Exporter: postgres-exporter:9187/metrics
+   
+   • PostgreSQL Connections: Connessioni attive database
+     └── Query: pg_stat_database_numbackends{datname="db_piazzati"}
+     └── Fonte: PostgreSQL Exporter - Statistiche native pg_stat_database
+     └── Exporter: postgres-exporter:9187/metrics
+   
+   • Memory Usage % System: Utilizzo memoria di sistema host
+     └── Query: ((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes) * 100
+     └── Fonte: Node Exporter - Metriche memoria sistema operativo
+     └── Exporter: node-exporter:9100/metrics
+   
+   PROMETHEUS SCRAPING CONFIGURATION:
+   - Backend FastAPI: scrape_interval 15s su http://piazzati-backend:8000/metrics
+   - Node Exporter: scrape_interval 15s su http://node-exporter:9100/metrics
+   - PostgreSQL Exporter: scrape_interval 15s su http://postgres-exporter:9187/metrics
+   - cAdvisor: scrape_interval 15s su http://cadvisor:8080/metrics
+   
+   ALERTING RULES CONFIGURATE:
+   - PiazzaTiHighCPU: Alert se CPU app >75% per 5 minuti
+   - PiazzaTiHighMemory: Alert se RAM app >80% per 5 minuti 
+   - SystemHighCPU: Alert se CPU sistema >90% per 5 minuti
+   
+   METRICHE PERSONALIZZATE ESPOSTE:
+   - piazzati_custom_requests_1_total: Contatore richieste API
+   - piazzati_custom_database_operations_1_total: Contatore operazioni DB
+   - http_server_duration_ms_bucket: Istogramma tempi risposta per calcolo percentili
+   - process_*: Metriche processo (CPU, memoria, file descriptors)
+   
+   Test validazione: pytest backend/tests/test_metrics.py -v
+
+5b. DEPLOYMENT PRODUZIONE SCALEWAY (Enterprise-Ready)
+   
+   OVERVIEW CONFIGURAZIONE PRODUZIONE:
+   Il sistema PiazzaTi è configurato per deployment enterprise su Scaleway con:
+   - CI/CD automatizzato tramite GitHub Actions
+   - Container Registry per immagini Docker ottimizzate
+   - SSL/TLS termination con reverse proxy Nginx
+   - Monitoring stack completo con persistenza dati
+   - Backup automatizzati e disaster recovery
+   
+   FILES CONFIGURAZIONE PRODUZIONE:
+   
+   📁 docker-compose.prod.yml - Stack produzione ottimizzato
+   • Configurazione enterprise con sicurezza avanzata
+   • Nessuna porta esposta direttamente (traffico via Load Balancer)
+   • Resource limits configurati per tutti i container
+   • Logging centralizzato con rotazione automatica
+   • Network isolation con subnet dedicata
+   • Profiles per componenti opzionali (Redis, self-hosted DB)
+   • Health checks avanzati con retry logic
+   
+   📁 monitoring/prometheus.prod.yml - Metriche produzione
+   • Scrape intervals ottimizzati per cloud (30s vs 15s)
+   • Retention policy 30 giorni / 10GB per costi contenuti
+   • External labels per identificazione ambiente
+   • Ready per integrazione Alertmanager Scaleway
+   • Remote storage configuration per backup metriche
+   
+   📁 nginx/nginx.prod.conf - Reverse proxy enterprise
+   • SSL/TLS termination con cipher suite sicure
+   • Rate limiting per protezione DDoS (API: 10r/s, Grafana: 5r/s)
+   • Load balancing con health checks automatici
+   • Subdomain routing: api/grafana/prometheus.piazzati.scaleway.example
+   • Security headers (HSTS, XSS Protection, Content Security)
+   • Gzip compression per performance
+   • Access control per endpoint admin
+   
+   📁 .github/workflows/ci.yml - CI/CD automatizzato
+   • Build automatico multi-stage Docker optimized
+   • Test suite completa con PostgreSQL + pgvector
+   • Security scanning con Trivy vulnerability scanner
+   • Push automatico su Scaleway Container Registry
+   • Deploy automatico su main branch push
+   • Rollback capabilities e environment management
+   
+   📁 Makefile - Gestione operazioni enterprise
+   • 25+ comandi per deployment e maintenance
+   • make deploy: Deploy stack completo
+   • make deploy-backend: Update solo backend (CI/CD)
+   • make scale-backend: Scaling orizzontale automatico
+   • make backup/restore: Disaster recovery
+   • make health: Health check completo stack
+   • make ssl-cert: Generazione certificati SSL
+   
+   COMPONENTI SCALEWAY UTILIZZATI:
+   
+   🔹 Container Registry (rg.fr-par.scw.cloud/piazzati)
+   • Storage immagini Docker ottimizzate
+   • Integration con GitHub Actions per push automatico
+   • Vulnerability scanning integrato
+   • Multi-tag support per versioning
+   
+   🔹 Scaleway Container Service
+   • Deploy automatico da Container Registry
+   • Auto-scaling basato su CPU/RAM metrics
+   • Load balancing integrato
+   • Health checks e restart automatici
+   
+   🔹 Scaleway Managed Database PostgreSQL (raccomandato)
+   • PostgreSQL 15 + pgvector gestito
+   • Backup automatici quotidiani
+   • High availability con replica
+   • Monitoring integrato
+   • Scaling verticale on-demand
+   
+   🔹 Scaleway Load Balancer
+   • SSL/TLS termination con certificati Let's Encrypt
+   • Distribuzione traffico multi-container
+   • Health checks applicativi
+   • DDoS protection integrata
+   
+   🔹 Scaleway Object Storage (backup)
+   • Backup automatici Grafana dashboards
+   • Retention policy metriche Prometheus
+   • Disaster recovery configurations
+   • Cross-region replication
+   
+   DEPLOYMENT WORKFLOW AUTOMATIZZATO:
+   
+   1. Developer Workflow:
+      git add .
+      git commit -m "feature: miglioramento API"
+      git push origin main  # 👈 TRIGGER AUTOMATICO
+   
+   2. GitHub Actions (automatico):
+      ✅ Test suite completa (8 test)
+      ✅ Security vulnerability scan
+      ✅ Build Docker image multi-stage ottimizzata
+      ✅ Push su Scaleway Container Registry
+      ✅ Deploy automatico su Scaleway Container Service
+      ✅ Health check post-deployment
+   
+   3. Scaleway (automatico):
+      ✅ Pull nuova immagine da registry
+      ✅ Rolling update senza downtime
+      ✅ Health check applicativo
+      ✅ Route traffic alla nuova versione
+      ✅ Monitoring e alerting attivi
+   
+   CONFIGURAZIONE SECRETS GITHUB:
+   Configurare in GitHub Repository → Settings → Secrets:
+   
+   SCALEWAY_REGISTRY_USERNAME = nologin
+   SCALEWAY_REGISTRY_PASSWORD = <registry-token>
+   SCALEWAY_ACCESS_KEY = <scaleway-access-key>
+   SCALEWAY_SECRET_KEY = <scaleway-secret-key>
+   SCALEWAY_PROJECT_ID = <scaleway-project-id>
+   SCALEWAY_DATABASE_URL = postgresql://user:pass@host:port/db
+   
+   COMANDI DEPLOYMENT RAPIDI:
+   
+   Setup iniziale produzione:
+   make setup              # Configurazione iniziale
+   cp .env.example .env.prod  # Configurazione environment
+   make ssl-cert          # Certificati SSL self-signed per test
+   
+   Deploy completo:
+   make deploy            # Stack completo produzione
+   make deploy-backend    # Solo backend (CI/CD)
+   make deploy-monitoring # Solo monitoring stack
+   
+   Monitoring e maintenance:
+   make status           # Status tutti i servizi
+   make health          # Health check completo
+   make logs            # Logs centralizzati
+   make backup          # Backup dati
+   
+   Scaling e performance:
+   make scale-backend   # Scale backend a 3 istanze
+   make update         # Update tutte le immagini
+   
+   URLS PRODUZIONE (da configurare DNS):
+   • API Backend: https://api.piazzati.scaleway.example
+   • Grafana Dashboard: https://grafana.piazzati.scaleway.example
+   • Prometheus Admin: https://prometheus.piazzati.scaleway.example
+   
+   SICUREZZA ENTERPRISE:
+   ✅ Container non-root per tutti i servizi
+   ✅ Network isolation con subnet dedicata
+   ✅ SSL/TLS termination con cipher suite moderne
+   ✅ Rate limiting anti-DDoS configurato
+   ✅ Security headers (HSTS, CSP, XSS Protection)
+   ✅ IP whitelisting per interfacce admin
+   ✅ Secrets management tramite environment variables
+   ✅ Vulnerability scanning automatico
+   ✅ Logging sicurezza con retention policy
 
 6. Migrazioni database (Automatiche in Docker)
    cd backend
@@ -1142,3 +1378,1651 @@ Risultato Finale
 - Docker Compose per deployment semplificato
 
 Il sistema è ora production-ready per monitoring e observability completa!
+
+===============================================================================
+APPENDICE TECNICA - SISTEMA DI MONITORAGGIO DETTAGLIATO
+===============================================================================
+
+Architettura Monitoring Stack
+-----------------------------
+
+Il sistema PiazzaTi implementa una soluzione di monitoraggio completa basata su:
+
+1. PROMETHEUS (Port 9090)
+   - Time Series Database per metriche
+   - Scraping automatico ogni 15 secondi da tutti i target
+   - Retention: 15 giorni di dati storici
+   - Query Language: PromQL per analisi avanzate
+   
+2. GRAFANA (Port 3000)
+   - Dashboard di visualizzazione professionale
+   - Tema dark mode per migliore visualizzazione
+   - Refresh automatico ogni 30 secondi
+   - Credenziali: admin/admin (cambiarle in produzione)
+
+3. NODE EXPORTER (Port 9100)
+   - Metriche sistema operativo: CPU, RAM, Disk, Network
+   - Integrazione nativa con host Windows/Linux
+   - Espone 500+ metriche sistema dettagliate
+
+4. cADVISOR (Port 8080)
+   - Monitoraggio container Docker in tempo reale
+   - Metriche risorse per container: CPU, Memory, Network, Filesystem
+   - Statistiche performance per ottimizzazione
+
+5. POSTGRESQL EXPORTER (Port 9187)
+   - Metriche specifiche database PostgreSQL
+   - Connessioni attive, query performance, statistiche tabelle
+   - Monitoraggio health database in tempo reale
+
+Layout Dashboard Grafana Ottimizzato - MAPPING COMPLETO FONTI METRICHE
+-------------------------------------------------------------------------
+
+La dashboard è organizzata in 3 righe logiche per massima leggibilità:
+
+RIGA 1 - API PERFORMANCE (y=0, altezza 8) [TUTTE DA FASTAPI BACKEND]
+├── Request Rate (x=0, w=8)
+│   ├── Query: rate(piazzati_custom_requests_1_total[5m])
+│   ├── Fonte: FastAPI Backend - Metrica custom incrementata per ogni richiesta HTTP
+│   ├── Exporter: piazzati-backend:8000/metrics (job="piazzati-backend")
+│   ├── Implementazione: Decoratore @track_requests su router FastAPI
+│   └── Unità: req/s (richieste al secondo)
+├── Response Time P95 (x=8, w=8) 
+│   ├── Query: histogram_quantile(0.95, rate(http_server_duration_ms_bucket[5m]))
+│   ├── Fonte: FastAPI Backend - OpenTelemetry HTTP instrumentation
+│   ├── Exporter: piazzati-backend:8000/metrics (job="piazzati-backend")
+│   ├── Implementazione: Middleware OpenTelemetry automatico per timing HTTP
+│   └── Unità: ms (95% richieste sotto questo tempo)
+└── Response Time P99 (x=16, w=8)
+    ├── Query: histogram_quantile(0.99, rate(http_server_duration_ms_bucket[5m]))
+    ├── Fonte: FastAPI Backend - OpenTelemetry HTTP instrumentation
+    ├── Exporter: piazzati-backend:8000/metrics (job="piazzati-backend")
+    ├── Implementazione: Middleware OpenTelemetry automatico per timing HTTP
+    └── Unità: ms (99% richieste sotto questo tempo)
+
+RIGA 2 - SISTEMA & APPLICAZIONE (y=8, altezza 8) [MIX NODE EXPORTER + FASTAPI]
+├── CPU Sistema % (x=0, w=6)
+│   ├── Query: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+│   ├── Fonte: Node Exporter - Statistiche CPU del sistema operativo host
+│   ├── Exporter: node-exporter:9100/metrics (job="node-exporter")
+│   ├── Implementazione: Lettura diretta da /proc/stat del kernel Linux/Windows
+│   └── Threshold: Verde <75%, Arancio <90%, Rosso >90%
+├── CPU App % PiazzaTi (x=6, w=6)
+│   ├── Query: rate(process_cpu_seconds_total{job="piazzati-backend"}[5m]) * 100
+│   ├── Fonte: FastAPI Backend - Metriche specifiche processo Python
+│   ├── Exporter: piazzati-backend:8000/metrics (job="piazzati-backend")
+│   ├── Implementazione: Prometheus client Python standard (process collector)
+│   └── Threshold: Verde <50%, Giallo <75%, Rosso >90%
+└── RAM App MB PiazzaTi (x=12, w=6)
+    ├── Query: process_resident_memory_bytes{job="piazzati-backend"} / (1024 * 1024)
+    ├── Fonte: FastAPI Backend - Metriche specifiche processo Python
+    ├── Exporter: piazzati-backend:8000/metrics (job="piazzati-backend")
+    ├── Implementazione: Prometheus client Python standard (process collector)
+    └── Unità: megabytes, Threshold: Verde <100MB, Giallo <200MB, Rosso >500MB
+
+RIGA 3 - DATABASE & MONITORING AVANZATO (y=16, altezza 8) [MIX FASTAPI + POSTGRES + NODE]
+├── Database Operations (x=0, w=6)
+│   ├── Query: rate(piazzati_custom_database_operations_1_total[5m])
+│   ├── Fonte: FastAPI Backend - Metrica custom incrementata per ogni query SQL
+│   ├── Exporter: piazzati-backend:8000/metrics (job="piazzati-backend")
+│   ├── Implementazione: Decoratore @track_db_operations su funzioni database
+│   └── Tipo: Graph per trend temporali
+├── Query Performance (x=6, w=6)
+│   ├── Query A: rate(pg_stat_database_tup_fetched{datname="db_piazzati"}[5m])
+│   ├── Query B: rate(pg_stat_database_tup_inserted{datname="db_piazzati"}[5m])
+│   ├── Fonte: PostgreSQL Exporter - Statistiche native pg_stat_database
+│   ├── Exporter: postgres-exporter:9187/metrics (job="postgres-exporter")
+│   └── Implementazione: Query dirette su viste sistema PostgreSQL
+├── PostgreSQL Connections (x=12, w=6)
+│   ├── Query: pg_stat_database_numbackends{datname="db_piazzati"}
+│   ├── Fonte: PostgreSQL Exporter - Statistiche native pg_stat_database
+│   ├── Exporter: postgres-exporter:9187/metrics (job="postgres-exporter")
+│   ├── Implementazione: SELECT numbackends FROM pg_stat_database
+│   └── Monitoraggio connessioni attive
+└── Memory Usage % System (x=18, w=6)
+    ├── Query: ((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes) * 100
+    ├── Fonte: Node Exporter - Metriche memoria del sistema operativo host
+    ├── Exporter: node-exporter:9100/metrics (job="node-exporter")
+    ├── Implementazione: Lettura diretta da /proc/meminfo del kernel
+    └── Threshold: Verde <75%, Arancio <90%, Rosso >90%
+
+RIEPILOGO EXPORTER UTILIZZATI PER DASHBOARD:
+📊 FastAPI Backend (piazzati-backend:8000/metrics): 6/9 pannelli
+   └── Request Rate, Response Time P95/P99, CPU App, RAM App, Database Operations
+📊 Node Exporter (node-exporter:9100/metrics): 2/9 pannelli  
+   └── CPU Sistema, Memory Usage System
+📊 PostgreSQL Exporter (postgres-exporter:9187/metrics): 2/9 pannelli
+   └── Query Performance, PostgreSQL Connections
+📊 cAdvisor (cadvisor:8080/metrics): 0/9 pannelli (disponibile per future espansioni)
+
+Prometheus Scraping Configuration
+---------------------------------
+
+File: monitoring/prometheus.yml
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert-rules.yml"
+
+scrape_configs:
+  - job_name: 'piazzati-backend'
+    static_configs:
+      - targets: ['piazzati-backend:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+Alert Rules Configurate
+-----------------------
+
+File: monitoring/alert-rules.yml
+
+1. PiazzaTiHighCPU
+   - Condizione: CPU applicazione >75% per 5 minuti consecutivi
+   - Severity: warning
+   - Query: rate(process_cpu_seconds_total{job="piazzati-backend"}[5m]) * 100 > 75
+
+2. PiazzaTiHighMemory
+   - Condizione: RAM applicazione >80% per 5 minuti consecutivi  
+   - Severity: warning
+   - Query: process_resident_memory_bytes{job="piazzati-backend"} / (1024*1024) > 80
+
+3. SystemHighCPU
+   - Condizione: CPU sistema >90% per 5 minuti consecutivi
+   - Severity: critical
+   - Query: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+
+Metriche Personalizzate Esposte
+-------------------------------
+
+L'applicazione FastAPI espone le seguenti metriche custom su /metrics:
+
+1. piazzati_custom_requests_1_total
+   - Tipo: Counter
+   - Descrizione: Contatore totale richieste HTTP
+   - Labels: method, endpoint, status_code
+
+2. piazzati_custom_database_operations_1_total  
+   - Tipo: Counter
+   - Descrizione: Contatore operazioni database
+   - Labels: operation_type (select, insert, update, delete)
+
+3. http_server_duration_ms_bucket
+   - Tipo: Histogram
+   - Descrizione: Distribuzione tempi risposta HTTP
+   - Buckets: 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, +Inf
+
+4. Metriche Processo Standard:
+   - process_cpu_seconds_total: Tempo CPU utilizzato
+   - process_resident_memory_bytes: Memoria RAM residente
+   - process_open_fds: File descriptors aperti
+   - process_start_time_seconds: Timestamp avvio processo
+
+Deployment e Manutenzione
+------------------------
+
+AVVIO SISTEMA COMPLETO:
+docker-compose up -d
+
+RIAVVIO SINGOLI COMPONENTI:
+docker-compose restart grafana
+docker-compose restart prometheus
+
+VERIFICA STATUS:
+docker-compose ps
+
+ACCESSO LOGS:
+docker-compose logs grafana
+docker-compose logs prometheus
+
+URL MONITORAGGIO:
+- Grafana Dashboard: http://localhost:3000 (admin/admin)
+- Prometheus UI: http://localhost:9090
+- Metriche Backend: http://localhost:8000/metrics
+- cAdvisor Container Metrics: http://localhost:8080
+- Node Exporter System Metrics: http://localhost:9100/metrics
+- PostgreSQL Exporter DB Metrics: http://localhost:9187/metrics
+
+Il sistema è ora enterprise-ready con monitoring completo per produzione! 🚀
+
+===============================================================================
+APPENDICE DEPLOYMENT PRODUZIONE SCALEWAY - CONFIGURAZIONI DETTAGLIATE
+===============================================================================
+
+Docker Compose Produzione - Analisi Configurazioni
+---------------------------------------------------
+
+Il file docker-compose.prod.yml implementa best practices enterprise:
+
+SICUREZZA CONTAINER:
+• Non-root user per tutti i servizi (security compliance)
+• Nessuna porta esposta direttamente (traffico via reverse proxy)
+• Resource limits configurati per prevenire resource exhaustion
+• Health checks con retry logic per high availability
+• Logging strutturato con rotazione automatica (max 10MB x 3 files)
+
+NETWORKING ISOLATO:
+• Custom bridge network con subnet dedicata (172.20.0.0/16)
+• Comunicazione inter-container su rete privata
+• Accesso esterno solo tramite Load Balancer/Nginx
+• DNS resolution automatico tra servizi
+
+PERSISTENZA DATI ENTERPRISE:
+• Volume mounting su host filesystem (/opt/piazzati/data/)
+• Backup path standardizzati per disaster recovery
+• Separation of concerns: prometheus/grafana/redis data isolated
+• Log aggregation path (/opt/piazzati/logs/)
+
+PROFILES CONFIGURABILI:
+• self-hosted-db: Per database PostgreSQL in container
+• with-redis: Per cache layer Redis opzionale
+• Attivazione: docker-compose --profile self-hosted-db up
+
+Nginx Reverse Proxy - Configurazione Enterprise
+-----------------------------------------------
+
+SECURITY FEATURES IMPLEMENTATE:
+• SSL/TLS termination con cipher suite moderne (TLS 1.2/1.3 only)
+• Security headers compliance:
+  - X-Frame-Options: DENY (clickjacking protection)
+  - X-Content-Type-Options: nosniff (MIME sniffing prevention)
+  - X-XSS-Protection: 1; mode=block (XSS protection)
+  - Strict-Transport-Security: HSTS implementation
+• IP whitelisting per admin interfaces (Prometheus)
+• Basic Auth capability per Grafana (opzionale)
+
+PERFORMANCE OPTIMIZATIONS:
+• Gzip compression per static content
+• Keep-alive connections con pool management
+• Load balancing con least_conn algorithm
+• Upstream health monitoring con fail_timeout
+• Connection pooling (keepalive 32 per backend, 8 per monitoring)
+
+RATE LIMITING ANTI-DDOS:
+• API endpoints: 10 req/s per IP con burst 20
+• Grafana interface: 5 req/s per IP con burst 10
+• Configurazione zone-based per granular control
+
+SUBDOMAIN ROUTING:
+• api.piazzati.scaleway.example → Backend FastAPI
+• grafana.piazzati.scaleway.example → Grafana Dashboard  
+• prometheus.piazzati.scaleway.example → Prometheus Admin
+
+GitHub Actions CI/CD - Analisi Completa del file .github/workflows/ci.yml
+--------------------------------------------------------------------------
+
+Il file ci.yml implementa una pipeline CI/CD enterprise per deployment automatico su Scaleway.
+
+TRIGGER AUTOMATICI CONFIGURATI:
+```yaml
+on:
+  push:
+    branches: [ main, dev, feature/* ]  # Deploy automatico su main
+  pull_request:
+    branches: [ main ]                  # Test su PR verso main
+```
+
+TRIGGER BEHAVIOR:
+• Push su main → Test + Build + Deploy automatico in produzione
+• Push su dev/feature → Solo test e validazione  
+• Pull Request → Test + Security scan (no deploy)
+• Manual trigger → Non configurato (solo automatico)
+
+VARIABILI GLOBALI PIPELINE:
+```yaml
+env:
+  REGISTRY: rg.fr-par.scw.cloud/piazzati     # Scaleway Container Registry
+  BACKEND_IMAGE: piazzati-backend           # Nome immagine backend
+  FRONTEND_IMAGE: piazzati-frontend         # Nome immagine frontend (futuro)
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+JOB 1: TEST & LINT (Eseguito sempre - Foundation Quality Gate)
+═══════════════════════════════════════════════════════════════════════════════
+
+NOME JOB: test
+RUNS ON: ubuntu-latest (GitHub hosted runner)
+CONDIZIONE: Sempre (su push e PR)
+
+SERVICE CONTAINERS AUTOMATICI:
+```yaml
+services:
+  postgres:
+    image: pgvector/pgvector:pg15              # Database con vector search
+    env:
+      POSTGRES_USER: piazzati_user            # User corretto (non più skilly)
+      POSTGRES_PASSWORD: piazzati_password    # Password allineata
+      POSTGRES_DB: db_piazzati               # Database name corretto
+    ports:
+      - 5432:5432                            # Porta standard PostgreSQL
+    options: >-
+      --health-cmd "pg_isready -U piazzati_user -d db_piazzati"
+      --health-interval 10s 
+      --health-timeout 5s 
+      --health-retries 5
+```
+
+STEP DETTAGLIATI JOB TEST:
+
+Step 1: Checkout code
+• Action: actions/checkout@v4 (versione più recente)
+• Funzione: Download completo repository nel runner
+• Include: Tutti i file di progetto per build e test
+
+Step 2: Set up Python
+• Action: actions/setup-python@v5
+• Python Version: 3.13 (latest stable, allineato con Dockerfile)
+• Funzione: Installazione Python runtime per test
+
+Step 3: Cache pip dependencies
+• Action: actions/cache@v4
+• Cache Key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+• Cache Path: ~/.cache/pip
+• Restore Keys: ${{ runner.os }}-pip-
+• Beneficio: Velocizza build subsequent del 60-80%
+
+Step 4: Install backend dependencies
+• Directory: backend/
+• Comando: pip install --upgrade pip && pip install -r requirements.txt
+• Include: FastAPI, SQLAlchemy, OpenTelemetry, Prometheus client, pytest
+
+Step 5: Lint backend code
+• Tool: flake8 (Python linting standard)
+• Configurazione: --max-line-length=88 --extend-ignore=E203,W503
+• Target: backend/app directory
+• Standard: Black-compatible formatting
+
+Step 6: Run backend tests
+• Environment Variables:
+  DATABASE_URL: postgresql://piazzati_user:piazzati_password@localhost:5432/db_piazzati
+• Comando: pytest tests/ -v --tb=short
+• Include: 8 test files per metrics, monitoring, system integration
+• Output: Detailed test results con failure details
+
+Step 7: Test Docker build
+• Comando: docker build -t piazzati-backend:test ./backend
+• Funzione: Validation che Dockerfile production funzioni
+• No push: Solo test locale per verificare build success
+
+═══════════════════════════════════════════════════════════════════════════════
+JOB 2: BUILD & DEPLOY (Solo main branch - Production Deployment)
+═══════════════════════════════════════════════════════════════════════════════
+
+NOME JOB: build-and-deploy
+NEEDS: test (dependency - attende successo test job)
+RUNS ON: ubuntu-latest
+CONDIZIONE: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+STEP DETTAGLIATI BUILD & DEPLOY:
+
+Step 1: Checkout code
+• Action: actions/checkout@v4
+• Funzione: Download repository per build production
+
+Step 2: Set up Docker Buildx
+• Action: docker/setup-buildx-action@v3
+• Funzione: Abilita Docker BuildKit per multi-platform builds
+• Benefici: Cache layers, parallel builds, advanced features
+
+Step 3: Log in to Scaleway Container Registry
+• Action: docker/login-action@v3
+• Registry: rg.fr-par.scw.cloud
+• Username: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }} (= nologin)
+• Password: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }} (token Scaleway)
+• Funzione: Autenticazione per push immagini
+
+Step 4: Extract metadata
+• Action: docker/metadata-action@v5
+• Images: rg.fr-par.scw.cloud/piazzati/piazzati-backend
+• Tags Strategy:
+  - type=ref,event=branch → main-branch per branch builds
+  - type=ref,event=pr → pr-123 per PR builds  
+  - type=sha,prefix={{branch}}- → main-abc1234 per commit specifici
+  - type=raw,value=latest,enable={{is_default_branch}} → latest per main branch
+• Output: Lista tags automatica per versioning
+
+Step 5: Build and push backend image
+• Action: docker/build-push-action@v5
+• Context: ./backend directory
+• Push: true (automatic push dopo build)
+• Tags: ${{ steps.meta.outputs.tags }} (dai metadata)
+• Labels: ${{ steps.meta.outputs.labels }} (metadata container)
+• Cache: 
+  - cache-from: type=gha (GitHub Actions cache)
+  - cache-to: type=gha,mode=max (salva cache layers)
+• Beneficio: Build optimized con layer caching
+
+Step 6: Deploy to Scaleway Container
+• Environment Variables:
+  - SCALEWAY_ACCESS_KEY: ${{ secrets.SCALEWAY_ACCESS_KEY }}
+  - SCALEWAY_SECRET_KEY: ${{ secrets.SCALEWAY_SECRET_KEY }}
+  - SCALEWAY_PROJECT_ID: ${{ secrets.SCALEWAY_PROJECT_ID }}
+
+• Substep A: Install Scaleway CLI
+  ```bash
+  curl -o /tmp/scw https://github.com/scaleway/scaleway-cli/releases/latest/download/scw-linux-x86_64
+  chmod +x /tmp/scw
+  ```
+
+• Substep B: Configure Scaleway CLI
+  ```bash
+  /tmp/scw config set access-key=$SCALEWAY_ACCESS_KEY
+  /tmp/scw config set secret-key=$SCALEWAY_SECRET_KEY
+  /tmp/scw config set default-project-id=$SCALEWAY_PROJECT_ID
+  /tmp/scw config set default-zone=fr-par-1
+  ```
+
+• Substep C: Deploy container
+  ```bash
+  /tmp/scw container container deploy \
+    registry-image=rg.fr-par.scw.cloud/piazzati/piazzati-backend:latest \
+    name=piazzati-backend-prod \
+    port=8000 \
+    environment-variables="DATABASE_URL=${{ secrets.SCALEWAY_DATABASE_URL }}" \
+    environment-variables="ENVIRONMENT=production" || true
+  ```
+  
+• Funzione: Update/Create container su Scaleway con nuova immagine
+• Rollback: || true previene failure se container non esiste ancora
+
+═══════════════════════════════════════════════════════════════════════════════
+JOB 3: SECURITY SCAN (Solo Pull Request - Security Gate)
+═══════════════════════════════════════════════════════════════════════════════
+
+NOME JOB: security-scan
+NEEDS: test (dependency - attende successo test job)
+RUNS ON: ubuntu-latest  
+CONDIZIONE: github.event_name == 'pull_request'
+
+STEP DETTAGLIATI SECURITY SCAN:
+
+Step 1: Checkout code
+• Action: actions/checkout@v4
+• Funzione: Download repository per security analysis
+
+Step 2: Run Trivy vulnerability scanner
+• Action: aquasecurity/trivy-action@master
+• Scan Type: 'fs' (filesystem scan)
+• Scan Reference: './backend' (target backend directory)
+• Format: 'sarif' (Security Analysis Results Interchange Format)
+• Output: 'trivy-results.sarif'
+• Funzione: Scansiona vulnerabilità in dependencies e filesystem
+
+Step 3: Upload Trivy scan results
+• Action: github/codeql-action/upload-sarif@v3
+• SARIF File: 'trivy-results.sarif'
+• Funzione: Upload risultati su GitHub Security tab
+• Beneficio: Integrazione con GitHub Security Advisory Database
+
+═══════════════════════════════════════════════════════════════════════════════
+WORKFLOW EXECUTION LOGIC
+═══════════════════════════════════════════════════════════════════════════════
+
+SCENARIO 1: Push su main branch
+1. ✅ Job TEST eseguito (PostgreSQL + Python setup + tests + lint + Docker build test)
+2. ✅ Job BUILD-DEPLOY eseguito solo se TEST success (build + push + deploy Scaleway)
+3. ❌ Job SECURITY-SCAN saltato (solo per PR)
+RISULTATO: Deployment automatico in produzione
+
+SCENARIO 2: Push su dev/feature branch  
+1. ✅ Job TEST eseguito (validation completa)
+2. ❌ Job BUILD-DEPLOY saltato (condition: main branch only)  
+3. ❌ Job SECURITY-SCAN saltato (solo per PR)
+RISULTATO: Solo test e validation, no deployment
+
+SCENARIO 3: Pull Request verso main
+1. ✅ Job TEST eseguito (quality gate)
+2. ❌ Job BUILD-DEPLOY saltato (condition: push only)
+3. ✅ Job SECURITY-SCAN eseguito (security validation)  
+RISULTATO: Test + Security scan, no deployment
+
+TIMING TIPICI:
+• Job TEST: ~3-5 minuti (con cache pip)
+• Job BUILD-DEPLOY: ~8-12 minuti (Docker build + Scaleway deploy)
+• Job SECURITY-SCAN: ~2-3 minuti (Trivy filesystem scan)
+
+FAILURE HANDLING:
+• Job TEST failure → Blocca tutti gli altri job (dependency)
+• Job BUILD-DEPLOY failure → Deployment fermato, produzione non toccata
+• Job SECURITY-SCAN failure → PR bloccata fino a security fix
+
+NOTIFICATION:
+• Success: ✅ Green check su GitHub commit
+• Failure: ❌ Red X su GitHub commit + email notification
+• Security Issues: 🔒 Security alert su GitHub Security tab
+
+ROLLBACK STRATEGY:
+• Automatic: Scaleway mantiene versione precedente se deployment fail
+• Manual: Redeploy previous commit o revert Git commit
+• Emergency: Scaleway CLI manual deployment di tag specifico
+
+═══════════════════════════════════════════════════════════════════════════════
+6b. CONFIGURAZIONE VARIABILI AMBIENTE PRODUZIONE (.env.prod)
+═══════════════════════════════════════════════════════════════════════════════
+
+File: .env.prod - Configuration centrale per deployment Scaleway
+
+SCOPO E FUNZIONALITÀ:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Il file .env.prod contiene TUTTE le variabili ambiente necessarie per deployment 
+production-ready su Scaleway Cloud Platform. Gestisce 8 categorie di configurazione:
+
+1. DATABASE CONFIGURATION - Scaleway Managed Database PostgreSQL
+2. SECURITY CONFIGURATION - JWT, CORS, API security
+3. SCALEWAY CONFIGURATION - Registry, Object Storage, regioni
+4. REDIS CONFIGURATION - Scaleway Managed Redis per caching
+5. MONITORING CONFIGURATION - Prometheus, Grafana, OpenTelemetry
+6. EMAIL CONFIGURATION - SMTP per notifiche sistema
+7. FILE STORAGE CONFIGURATION - Object Storage per uploads
+8. APPLICATION CONFIGURATION - Server, rate limiting, logging
+
+VARIABILI CRITICHE SCALEWAY:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DATABASE_URL (Managed Database):
+Format: postgresql://username:password@host:port/database?sslmode=require
+Esempio: postgresql://piazzati_user:DB_PASS@db-123456.postgresql.fr-par.scw.cloud:5432/db_piazzati?sslmode=require
+
+SCALEWAY_REGISTRY (Container Registry):
+Value: rg.fr-par.scw.cloud/piazzati
+Funzione: Repository Docker images per deployment automatico
+
+REDIS_URL (Managed Redis):
+Format: redis://host:port/db_number
+Esempio: redis://redis-123456.managed.fr-par.scw.cloud:6379/0
+SSL: redis://redis-123456.managed.fr-par.scw.cloud:6380/0 (SSL port)
+
+SCALEWAY_S3_* (Object Storage):
+Endpoint: https://s3.fr-par.scw.cloud
+Bucket: piazzati-backups (per backup automatici)
+Bucket: piazzati-uploads (per user uploads)
+
+SECURITY CONFIGURATION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECRET_KEY: Chiave JWT per token authentication
+Generazione: openssl rand -base64 32
+Requisiti: Minimo 32 caratteri, univoca per environment
+
+CORS_ORIGINS: Domini permessi per CORS
+Production: https://piazzati.yourdomain.com,https://www.piazzati.yourdomain.com
+Development: http://localhost:3000 (NON in production)
+
+API_V1_STR: Versioning API endpoint
+Standard: /api/v1
+Funzione: Consistent API versioning
+
+MONITORING INTEGRATION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PROMETHEUS_MULTIPROC_DIR: Directory metrics condivise
+OTEL_SERVICE_NAME: Nome servizio per tracing distribuito
+GRAFANA_URL: URL dashboard Grafana (Scaleway Managed o self-hosted)
+SENTRY_DSN: Error tracking per monitoring avanzato
+
+APPLICATION TUNING:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WORKERS: 4 (ottimizzato per Scaleway Container Standard)
+WORKER_CLASS: uvicorn.workers.UvicornWorker (async support)
+TIMEOUT: 120 seconds (cloud latency consideration)
+RATE_LIMIT_REQUESTS: 100/hour per IP (DDoS protection)
+
+BACKUP AUTOMATION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BACKUP_SCHEDULE: 0 2 * * * (daily 2 AM UTC)
+BACKUP_RETENTION_DAYS: 30 (compliance standard)
+BACKUP_S3_BUCKET: piazzati-backups (Scaleway Object Storage)
+
+PROCEDURA CONFIGURAZIONE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1: Ottenere credenziali Scaleway
+• Login Scaleway Console: https://console.scaleway.com
+• Creare project "PiazzaTi Production"
+• Generare API Keys (Access Key + Secret Key)
+• Annotare Project ID
+
+STEP 2: Configurare servizi managed
+• Managed Database PostgreSQL 15 con pgvector
+• Managed Redis per caching
+• Container Registry namespace "piazzati"
+• Object Storage bucket setup
+
+STEP 3: Generare credenziali sicure
+```bash
+# Secret key JWT
+openssl rand -base64 32
+
+# Password Grafana admin
+openssl rand -base64 16
+
+# API keys verifica
+scw account project list
+```
+
+STEP 4: Sostituire placeholder .env.prod
+• DATABASE_URL con endpoint Managed Database
+• REDIS_URL con endpoint Managed Redis  
+• Credenziali S3 con API keys Scaleway
+• Domini con DNS reali configurati
+
+STEP 5: Test configurazione
+```bash
+# Test database connection
+psql $DATABASE_URL -c "SELECT version();"
+
+# Test Redis connection  
+redis-cli -u $REDIS_URL ping
+
+# Test S3 access
+aws s3 ls --endpoint-url=$SCALEWAY_S3_ENDPOINT
+```
+
+SICUREZZA .env.prod:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  CRITICAL: File .env.prod NON deve essere committato in Git
+✅ Aggiunto a .gitignore automaticamente
+✅ Gestito come GitHub Secret per CI/CD
+✅ Encrypted storage su Scaleway
+
+DEPLOYMENT USAGE:
+```bash
+# Local test con production env
+docker-compose --env-file .env.prod up
+
+# CI/CD injection (GitHub Actions)
+docker run --env-file .env.prod piazzati-backend
+
+# Scaleway Container deployment
+scw container container update $CONTAINER_ID --environment-variables-file .env.prod
+```
+
+Makefile Operations - Gestione Enterprise
+-----------------------------------------
+
+CATEGORIE COMANDI IMPLEMENTATE:
+
+DEPLOYMENT AUTOMATION:
+• make deploy: Stack completo con dependency checks
+• make deploy-backend: CI/CD optimized backend-only update
+• make deploy-monitoring: Monitoring stack isolation
+• make deploy-with-db: Self-hosted database option
+• make scale-backend: Horizontal scaling automatico
+
+MONITORING & HEALTH:
+• make status: Service status con endpoint checking
+• make health: HTTP health checks per tutti i servizi
+• make logs: Centralized logging con filtering options
+• make monitor: Dashboard URL generation
+
+BACKUP & DISASTER RECOVERY:
+• make backup: Data backup con timestamp automatico
+• make restore: Point-in-time restore da backup specifico
+• Backup path: /backups/YYYYMMDD_HHMMSS/ structure
+• Container volume extraction/injection automatico
+
+SECURITY & CERTIFICATES:
+• make ssl-cert: Self-signed certificate generation
+• make prod-check: Production readiness validation
+• Certificate path standardization (/nginx/ssl/)
+
+DEVELOPMENT HELPERS:
+• make dev-setup: Local development environment
+• make clean: Complete cleanup con confirmation prompt
+• make update: Rolling update tutte le immagini
+
+Prometheus Production - Configurazione Avanzata
+-----------------------------------------------
+
+OTTIMIZZAZIONI CLOUD:
+• Scrape intervals aumentati per ridurre overhead (30s vs 15s dev)
+• Retention policy ottimizzata per costi cloud (30d/10GB)
+• External labels per multi-environment identification
+• Remote storage ready per Object Storage backup
+
+TARGET CONFIGURATION:
+• Backend: 15s interval (business metrics critici)
+• Node Exporter: 30s interval (system metrics)
+• cAdvisor: 30s interval (container metrics)  
+• PostgreSQL Exporter: 30s interval (database metrics)
+• Grafana self-monitoring: 60s interval
+
+ALERTMANAGER INTEGRATION:
+• Configuration ready per Scaleway notification channels
+• External labels forwarding per alert routing
+• Webhook endpoints preparation per PagerDuty/Slack
+
+PERFORMANCE TUNING:
+• TSDB compression enabled per storage optimization
+• Query timeout configuration per response reliability
+• Concurrent query limiting per resource management
+
+═══════════════════════════════════════════════════════════════════════════════
+6c. HTTPS E LOAD BALANCER SCALEWAY - SSL/TLS TERMINATION
+═══════════════════════════════════════════════════════════════════════════════
+
+ARCHITETTURA HTTPS ENTERPRISE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Il Load Balancer Scaleway implementa SSL/TLS termination enterprise con:
+• Frontend HTTPS (443) → Backend HTTP (8000) per API
+• Frontend HTTPS (3000) → Backend HTTP (3000) per Grafana  
+• Frontend HTTP (80) → Redirect HTTPS (301) per security enforcement
+• Health checks automatici per high availability
+• Session persistence per Grafana dashboard continuity
+
+CONFIGURAZIONE LOAD BALANCER:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: configs/scaleway-loadbalancer.json
+
+FRONTEND CONFIGURATION:
+```json
+{
+  "piazzati-https-frontend": {
+    "inbound_port": 443,
+    "backend": "piazzati-backend-pool", 
+    "ssl_termination": true,
+    "http3_enabled": true,
+    "timeout_client": "30s"
+  },
+  "grafana-https-frontend": {
+    "inbound_port": 3000,
+    "backend": "grafana-backend-pool",
+    "ssl_termination": true, 
+    "sticky_sessions": "cookie",
+    "timeout_client": "60s"
+  }
+}
+```
+
+BACKEND POOLS CONFIGURATION:
+```json
+{
+  "piazzati-backend-pool": {
+    "algorithm": "roundrobin",
+    "health_check": {
+      "uri": "/health",
+      "interval": "10s",
+      "timeout": "5s",
+      "retries": 3,
+      "expected_code": 200
+    }
+  },
+  "grafana-backend-pool": {
+    "algorithm": "roundrobin", 
+    "sticky_sessions": "cookie",
+    "health_check": {
+      "uri": "/api/health",
+      "interval": "15s",
+      "timeout": "10s",
+      "retries": 3
+    }
+  }
+}
+```
+
+SSL CERTIFICATE MANAGEMENT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CERTIFICATE TYPES SUPPORTATI:
+• Custom Certificate: Certificato proprio (self-signed o CA)
+• Let's Encrypt: Certificato automatico gratuito (ACME)
+• Scaleway Certificate Manager: Gestione centralizzata
+
+GENERAZIONE SELF-SIGNED (development/testing):
+```bash
+# Private key generation
+openssl genrsa -out piazzati.key 4096
+
+# Certificate Signing Request
+openssl req -new -key piazzati.key -out piazzati.csr \
+  -subj "/C=IT/ST=Italy/L=Milan/O=PiazzaTi/CN=piazzati.yourdomain.com"
+
+# Self-signed certificate (90 days)
+openssl x509 -req -days 90 -in piazzati.csr \
+  -signkey piazzati.key -out piazzati.crt
+
+# Certificate chain creation
+cat piazzati.crt > piazzati-chain.crt
+```
+
+PRODUCTION CERTIFICATE (Let's Encrypt):
+```bash
+# Install Certbot
+sudo apt install certbot
+
+# Generate certificate
+sudo certbot certonly --standalone \
+  -d piazzati.yourdomain.com \
+  -d api.piazzati.yourdomain.com \
+  -d grafana.piazzati.yourdomain.com
+
+# Certificate files location
+CERT_PATH="/etc/letsencrypt/live/piazzati.yourdomain.com/"
+FULLCHAIN="$CERT_PATH/fullchain.pem"
+PRIVKEY="$CERT_PATH/privkey.pem"
+```
+
+SETUP AUTOMATICO SCRIPT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: scripts/setup-https.sh - Automazione completa
+
+FEATURES SCRIPT:
+• Prerequisiti validation (Scaleway CLI, OpenSSL)
+• SSL certificate generation automatica
+• Load Balancer creation con configuration
+• Backend pools setup con health checks
+• Frontend rules creation per SSL termination
+• DNS configuration guidance
+• Configuration export per future reference
+
+EXECUTION:
+```bash
+# Set environment variables
+export SCALEWAY_ACCESS_KEY="your_access_key"
+export SCALEWAY_SECRET_KEY="your_secret_key" 
+export SCALEWAY_PROJECT_ID="your_project_id"
+
+# Run setup script
+chmod +x ./scripts/setup-https.sh
+./scripts/setup-https.sh
+```
+
+SCRIPT OUTPUT:
+• Load Balancer ID e IP address
+• SSL Certificate ID per reference
+• Backend pool IDs per management
+• DNS configuration requirements
+• Configuration file export
+
+DNS CONFIGURATION REQUIRED:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DNS A RECORDS (sostituire IP_LOAD_BALANCER):
+```
+piazzati.yourdomain.com      A    IP_LOAD_BALANCER
+api.piazzati.yourdomain.com  A    IP_LOAD_BALANCER  
+grafana.piazzati.yourdomain.com A IP_LOAD_BALANCER
+www.piazzati.yourdomain.com  CNAME piazzati.yourdomain.com
+```
+
+TTL CONFIGURATION:
+• Production: 3600s (1 hour) per stability
+• Testing: 300s (5 minutes) per quick changes
+
+CNAME vs A RECORD:
+• Root domain: A record required (DNS standard)
+• Subdomains: CNAME possible per management flexibility
+
+ENDPOINTS FINALI:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRODUCTION URLS:
+• Main Application: https://piazzati.yourdomain.com
+• API Endpoint: https://api.piazzati.yourdomain.com  
+• API Documentation: https://api.piazzati.yourdomain.com/docs
+• Health Check: https://api.piazzati.yourdomain.com/health
+• Metrics: https://api.piazzati.yourdomain.com/metrics
+• Grafana Dashboard: https://grafana.piazzati.yourdomain.com:3000
+
+HTTP REDIRECTS:
+• http://piazzati.yourdomain.com → https://piazzati.yourdomain.com (301)
+• http://api.piazzati.yourdomain.com → https://api.piazzati.yourdomain.com (301)
+
+SECURITY HEADERS:
+• HSTS: max-age=31536000; includeSubDomains
+• X-Frame-Options: DENY
+• X-Content-Type-Options: nosniff  
+• Referrer-Policy: strict-origin-when-cross-origin
+
+HIGH AVAILABILITY CONFIGURATION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+HEALTH CHECKS:
+• API Backend: GET /health ogni 10s (timeout 5s, 3 retries)
+• Grafana Backend: GET /api/health ogni 15s (timeout 10s, 3 retries)
+• Unhealthy threshold: 3 consecutive failures
+• Healthy threshold: 2 consecutive successes
+
+FAILOVER BEHAVIOR:
+• Backend failure: Traffic routing per healthy instances only
+• All backends down: 503 Service Unavailable response
+• Recovery: Automatic traffic restoration dopo health check success
+
+LOAD BALANCING ALGORITHMS:
+• API: roundrobin (equal distribution)
+• Grafana: roundrobin + sticky sessions (dashboard persistence)
+
+MONITORING & ALERTING:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+LOAD BALANCER METRICS:
+• Request count per backend
+• Response time distribution
+• Error rate per endpoint
+• SSL handshake metrics
+• Active connections count
+
+ALERTING RULES:
+• SSL certificate expiration (30 days warning)
+• Backend health check failures
+• High error rate (>5% 5xx responses)
+• High response time (>2000ms p95)
+
+CERTIFICATE RENEWAL:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AUTOMATED RENEWAL (Let's Encrypt):
+```bash
+# Cron job per renewal automatico
+0 2 * * 0 certbot renew --quiet --post-hook "systemctl reload nginx"
+
+# Manual renewal testing
+certbot renew --dry-run
+```
+
+CERTIFICATE UPDATE SCALEWAY:
+```bash
+# Update certificate su Load Balancer
+scw lb certificate update $CERT_ID \
+  certificate-chain="$(cat /etc/letsencrypt/live/domain/fullchain.pem)" \
+  private-key="$(cat /etc/letsencrypt/live/domain/privkey.pem)"
+```
+
+TROUBLESHOOTING HTTPS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+COMMON ISSUES:
+• SSL handshake failures: Verify certificate chain completeness
+• Mixed content warnings: Ensure all resources use HTTPS
+• Certificate mismatch: Verify domain names in certificate SAN
+• Health check failures: Verify backend application health endpoints
+
+TESTING COMMANDS:
+```bash
+# SSL certificate verification
+openssl s_client -connect piazzati.yourdomain.com:443 -servername piazzati.yourdomain.com
+
+# DNS resolution check  
+nslookup piazzati.yourdomain.com
+
+# Load balancer health
+curl -I https://api.piazzati.yourdomain.com/health
+
+# Certificate expiration check
+echo | openssl s_client -servername piazzati.yourdomain.com -connect piazzati.yourdomain.com:443 2>/dev/null | openssl x509 -noout -dates
+```
+
+Environment Variables Production
+-------------------------------
+
+SECURITY VARIABLES:
+DATABASE_URL: Scaleway Managed Database connection string
+GRAFANA_ADMIN_PASSWORD: Strong password per admin access
+GRAFANA_SECRET_KEY: 32-char random key per session security
+REDIS_PASSWORD: Cache layer authentication
+
+PERFORMANCE VARIABLES:
+WORKERS: FastAPI worker count (default 4, scale based on CPU)
+LOG_LEVEL: Production logging level (info/warning/error)
+ENVIRONMENT: Production flag per configuration switching
+
+SCALEWAY INTEGRATION:
+REGISTRY: Container registry URL (rg.fr-par.scw.cloud/piazzati)
+TAG: Image tag per versioning (latest/main-sha/release-tag)
+
+MONITORING VARIABLES:
+GRAFANA_DOMAIN: Public domain per Grafana access
+POSTGRES_EXPORTER_URL: Database metrics connection
+REDIS_URL: Cache connection string (se Redis abilitato)
+
+═══════════════════════════════════════════════════════════════════════════════
+6d. BACKUP E PERSISTENZA - SCALEWAY OBJECT STORAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+ARCHITETTURA BACKUP ENTERPRISE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Sistema backup automatico su Scaleway Object Storage con:
+• Backup PostgreSQL (full, schema-only, data-only)
+• Backup Grafana dashboards + configuration
+• Backup Prometheus metrics data + alerting rules
+• Versioning automatico con timestamp
+• Retention policy configurabile (default 30 giorni)
+• Metadata tracking per backup management
+• Restore automatico point-in-time
+
+SCALEWAY OBJECT STORAGE CONFIGURATION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BUCKET STRUCTURE:
+```
+s3://piazzati-backups/
+├── backups/
+│   ├── piazzati-backup-20241009_020000.tar.gz
+│   ├── piazzati-backup-20241010_020000.tar.gz
+│   └── piazzati-backup-20241011_020000.tar.gz
+├── metadata/
+│   ├── backup-metadata-20241009_020000.json
+│   ├── backup-metadata-20241010_020000.json
+│   └── backup-metadata-20241011_020000.json
+└── hourly/
+    ├── hourly_backup_09.sql.gz
+    ├── hourly_backup_10.sql.gz
+    └── hourly_backup_11.sql.gz
+```
+
+BACKUP COMPONENTS:
+```
+backup-TIMESTAMP.tar.gz
+├── database/
+│   ├── piazzati_full_TIMESTAMP.dump      # Full database backup
+│   ├── piazzati_schema_TIMESTAMP.sql     # Schema-only backup
+│   └── piazzati_data_TIMESTAMP.sql       # Data-only backup
+├── grafana/
+│   ├── grafana_data_TIMESTAMP.tar.gz     # Grafana data directory
+│   ├── grafana.ini                       # Configuration file
+│   └── dashboards/
+│       ├── dashboard-uid1.json
+│       └── dashboard-uid2.json
+└── prometheus/
+    ├── prometheus_data_TIMESTAMP.tar.gz  # Metrics data
+    ├── prometheus.yml                    # Configuration
+    └── alert-rules.yml                   # Alerting rules
+```
+
+BACKUP SCRIPT AUTOMATION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: scripts/backup-system.sh - Sistema completo
+
+FEATURES PRINCIPALI:
+• Database backup con pg_dump (custom format, schema, data)
+• Grafana backup via container export + API dashboard export
+• Prometheus data backup con container volume extraction
+• S3 upload con AWS CLI compatibile Scaleway
+• Metadata generation per backup tracking
+• Retention cleanup automatico
+• Restore functionality point-in-time
+
+ENVIRONMENT VARIABLES REQUIRED:
+```bash
+export SCALEWAY_S3_ACCESS_KEY="your_access_key"
+export SCALEWAY_S3_SECRET_KEY="your_secret_key"
+export DATABASE_URL="postgresql://user:pass@host:5432/db_piazzati"
+export GRAFANA_ADMIN_PASSWORD="admin_password"
+```
+
+USAGE EXAMPLES:
+```bash
+# Manual backup completo
+./scripts/backup-system.sh manual
+
+# List available backups
+./scripts/backup-system.sh list
+
+# Restore da backup specifico
+./scripts/backup-system.sh restore piazzati-backup-20241009_020000.tar.gz
+
+# Cleanup backups vecchi
+./scripts/backup-system.sh cleanup
+```
+
+AUTOMATION CON CRONTAB:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: configs/backup-crontab - Schedule automatico
+
+SCHEDULE CONFIGURATION:
+• Daily backup: 2:00 AM UTC (full system backup)
+• Weekly cleanup: Sunday 3:00 AM (remove old backups)
+• Health check: Every 6 hours (verify backup existence)
+• Log rotation: Daily con retention 30 giorni
+
+INSTALLATION:
+```bash
+# Install crontab
+crontab configs/backup-crontab
+
+# Create log directory
+sudo mkdir -p /var/log/piazzati
+sudo chown $USER:$USER /var/log/piazzati
+
+# Verify installation
+crontab -l
+
+# Monitor backup logs
+tail -f /var/log/piazzati/backup.log
+```
+
+CRON ENTRIES:
+```bash
+# Daily full backup at 2 AM
+0 2 * * * cd /opt/piazzati && ./scripts/backup-system.sh manual
+
+# Weekly cleanup on Sunday at 3 AM
+0 3 * * 0 cd /opt/piazzati && ./scripts/backup-system.sh cleanup
+
+# Health check every 6 hours
+0 */6 * * * cd /opt/piazzati && ./scripts/backup-system.sh list | grep -q "$(date +%Y%m%d)" || echo "ALERT: No backup today"
+```
+
+TESTING ENVIRONMENT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: docker-compose.backup.yml - Test environment locale
+
+SERVICES TESTING:
+• MinIO S3-compatible storage per test locali
+• AWS CLI container per backup operations testing
+• PostgreSQL test database con sample data
+• Backup scheduler con cron automatico
+• Health checks per service reliability
+
+SETUP TESTING:
+```bash
+# Start test environment
+docker-compose -f docker-compose.backup.yml up -d
+
+# Access MinIO console
+http://localhost:9001
+User: piazzati_s3_user
+Password: piazzati_s3_password_secure_123
+
+# Test backup manually
+docker exec piazzati-backup-tester aws s3 ls s3://piazzati-backups/
+
+# Test database backup
+pg_dump postgresql://test_user:test_password_123@localhost:5433/test_backup_db
+```
+
+RESTORE PROCEDURES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DATABASE RESTORE:
+```bash
+# List available backups
+./scripts/backup-system.sh list
+
+# Download specific backup
+aws s3 cp s3://piazzati-backups/backups/piazzati-backup-TIMESTAMP.tar.gz . \
+  --endpoint-url=https://s3.fr-par.scw.cloud
+
+# Extract backup
+tar -xzf piazzati-backup-TIMESTAMP.tar.gz
+
+# Restore database
+pg_restore --clean --if-exists --create -d $DATABASE_URL \
+  piazzati-backup-TIMESTAMP/database/piazzati_full_TIMESTAMP.dump
+```
+
+GRAFANA RESTORE:
+```bash
+# Stop Grafana service
+docker compose stop grafana
+
+# Restore Grafana data
+docker compose run --rm grafana sh -c "
+  rm -rf /var/lib/grafana/* && 
+  tar -xzf /backup/grafana_data_TIMESTAMP.tar.gz -C /
+"
+
+# Restart Grafana
+docker compose up -d grafana
+
+# Import dashboards via API
+for dashboard in dashboards/*.json; do
+  curl -X POST -H "Content-Type: application/json" \
+    -u admin:$GRAFANA_ADMIN_PASSWORD \
+    -d @$dashboard \
+    http://localhost:3000/api/dashboards/db
+done
+```
+
+PROMETHEUS RESTORE:
+```bash
+# Stop Prometheus service
+docker compose stop prometheus
+
+# Restore Prometheus data
+docker compose run --rm prometheus sh -c "
+  rm -rf /prometheus/* && 
+  tar -xzf /backup/prometheus_data_TIMESTAMP.tar.gz -C /
+"
+
+# Restart Prometheus
+docker compose up -d prometheus
+```
+
+DISASTER RECOVERY PLAN:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RECOVERY TIME OBJECTIVES (RTO):
+• Database restore: 15 minuti (Managed Database restore)
+• Grafana restore: 5 minuti (container volume restore)
+• Prometheus restore: 10 minuti (metrics data restore)
+• Full system recovery: 30 minuti (complete stack)
+
+RECOVERY POINT OBJECTIVES (RPO):
+• Database: 24 ore (daily backup)
+• Grafana: 24 ore (dashboard configuration)
+• Prometheus: 24 ore (metrics data, configurable)
+• Critical data: 1 ora (hourly database backup opzionale)
+
+EMERGENCY PROCEDURES:
+1. Assess failure scope (database, application, infrastructure)
+2. Identify latest valid backup from S3 bucket
+3. Restore database first (data priority)
+4. Restore application configuration
+5. Verify system functionality
+6. Notify stakeholders of recovery completion
+
+MONITORING & ALERTING:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BACKUP MONITORING:
+• Daily backup success/failure alerts
+• S3 storage usage monitoring
+• Backup size trend analysis
+• Retention policy compliance
+
+ALERTING RULES:
+• Backup failure: Critical alert entro 1 ora
+• Missing backup: Warning se no backup in 25 ore
+• Storage quota: Warning a 80% utilizzo
+• Restore test: Monthly automated test
+
+COST OPTIMIZATION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SCALEWAY OBJECT STORAGE PRICING:
+• Standard Storage: €0.02/GB/month
+• Transfer OUT: €0.01/GB
+• Requests: €0.0004/1000 requests
+
+OPTIMIZATION STRATEGIES:
+• Compression: gzip backup files (70% riduzione size)
+• Retention: 30 giorni balance compliance/cost
+• Lifecycle: Auto-delete dopo retention period
+• Multi-regional: Solo se compliance required
+
+BACKUP SIZE ESTIMATES:
+• Database (small): 100MB compressed
+• Grafana config: 5MB compressed
+• Prometheus (7 days): 500MB compressed
+• Total daily backup: ~600MB
+• Monthly storage cost: ~€0.36/month
+
+Deployment Checklist Production
+------------------------------
+
+PRE-DEPLOYMENT:
+☐ Scaleway account setup con payment method
+☐ Container Registry namespace creation (piazzati)
+☐ Managed Database PostgreSQL provisioning
+☐ Load Balancer setup con SSL certificate
+☐ DNS configuration per subdomains
+☐ GitHub secrets configuration (6 secrets required)
+☐ .env.prod file configuration completata
+
+DEPLOYMENT STEPS:
+☐ git push origin main (trigger CI/CD automatico)
+☐ Verify GitHub Actions pipeline success
+☐ Check Scaleway Container Service status
+☐ Validate health endpoints (API, Grafana, Prometheus)
+☐ Verify SSL certificate installation
+☐ Test Load Balancer routing
+☐ Configure DNS records per production domains
+
+POST-DEPLOYMENT:
+☐ Grafana admin password change da default
+☐ Dashboard import e configuration  
+☐ Alert rules validation e testing
+
+═══════════════════════════════════════════════════════════════════════════════
+6e. SICUREZZA PRODUZIONE - ENTERPRISE SECURITY HARDENING
+═══════════════════════════════════════════════════════════════════════════════
+
+ARCHITETTURA SICUREZZA ENTERPRISE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Sistema sicurezza multi-layer con:
+• Scaleway Security Groups (firewall cloud-native)
+• SSL/TLS termination con certificati enterprise
+• Container security con non-root users e capability dropping
+• Network isolation con bridge dedicato  
+• Security monitoring automatico
+• Rate limiting e DDoS protection
+• Database security con audit logging
+• Credential management centralizzato
+
+SCALEWAY SECURITY GROUPS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FIREWALL CONFIGURATION:
+```
+piazzati-backend-sg:
+  Inbound: 
+    - Port 8000 TCP da 172.16.0.0/12 (private network)
+    - Port 22 TCP da YOUR_ADMIN_IP/32 (SSH admin)
+  Outbound: All (for dependencies, monitoring)
+
+piazzati-database-sg:
+  Inbound:
+    - Port 5432 TCP da 172.16.0.0/12 (backend only)
+  Outbound: None (database isolation)
+
+piazzati-monitoring-sg:
+  Inbound:
+    - Port 3000 TCP da 0.0.0.0/0 (Grafana via Load Balancer)
+    - Port 9090 TCP da 172.16.0.0/12 (Prometheus private)
+  Outbound: All (for metrics collection)
+```
+
+RULE IMPLEMENTATION:
+```bash
+# Create security groups via script
+./scripts/security-hardening.sh
+
+# Manual creation
+scw instance security-group create name="piazzati-backend-sg"
+scw instance security-group-rule create security-group-id=$SG_ID \
+  direction=inbound action=accept protocol=TCP \
+  dest-port-from=8000 dest-port-to=8000 ip-range=172.16.0.0/12
+```
+
+CONTAINER SECURITY HARDENING:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: docker-compose.security.yml - Security overlay
+
+SECURITY FEATURES:
+• no-new-privileges: Previene privilege escalation
+• cap_drop: ALL - Rimuove tutte le capabilities
+• cap_add: Solo capabilities necessarie (NET_BIND_SERVICE)
+• read_only: Filesystem read-only per immutability
+• tmpfs: Directory temporanee in memoria
+• user: Non-root users per tutti i servizi
+• security_opt: Configurazioni aggiuntive
+
+CONTAINER USERS:
+```yaml
+backend:
+  user: "10001:10001"  # Custom non-root user
+grafana:
+  user: "472:472"      # Official Grafana user
+prometheus:
+  user: "65534:65534"  # Nobody user
+nginx:
+  user: "101:101"      # Nginx user
+```
+
+DEPLOYMENT SECURITY:
+```bash
+# Deploy with security overlay
+docker-compose -f docker-compose.prod.yml -f docker-compose.security.yml up -d
+
+# Verify security settings
+docker inspect piazzati-backend | jq '.[] | .HostConfig.SecurityOpt'
+```
+
+SSL/TLS SECURITY CONFIGURATION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: nginx/nginx.security.conf - Security-hardened reverse proxy
+
+TLS CONFIGURATION:
+• Protocols: TLSv1.2, TLSv1.3 only (no legacy)
+• Ciphers: ECDHE suites preferiti
+• HSTS: max-age=31536000 con includeSubDomains
+• OCSP Stapling: Performance e privacy
+• Session cache: 10MB shared per performance
+
+SECURITY HEADERS:
+```nginx
+Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+X-XSS-Protection: 1; mode=block
+Referrer-Policy: strict-origin-when-cross-origin
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+```
+
+RATE LIMITING:
+```nginx
+limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=login:10m rate=1r/s;
+limit_req_zone $binary_remote_addr zone=grafana:10m rate=5r/s;
+limit_conn_zone $binary_remote_addr zone=conn_limit_per_ip:10m;
+```
+
+ATTACK PROTECTION:
+```nginx
+# Block SQL injection, XSS, path traversal
+map $request_uri $malicious {
+    ~*(select|union|insert|drop|delete|update|--|;) 1;
+    ~*(<script|javascript:|vbscript:|onload|onerror) 1;
+    ~*(/\.git|/\.svn|/\.hg) 1;
+    ~*\.(asp|aspx|php|jsp)$ 1;
+}
+```
+
+DATABASE SECURITY:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: scripts/database-security.sql - Hardening completo
+
+USER MANAGEMENT:
+• piazzati_app: Application user con minimal privileges
+• piazzati_readonly: Read-only per monitoring
+• piazzati_backup: Backup-only user
+• piazzati_admin: Administrative user (emergency only)
+
+PRIVILEGES CONFIGURATION:
+```sql
+-- Revoke default public permissions
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+REVOKE ALL ON DATABASE db_piazzati FROM PUBLIC;
+
+-- Grant minimal privileges
+GRANT CONNECT ON DATABASE db_piazzati TO piazzati_app;
+GRANT USAGE ON SCHEMA public TO piazzati_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO piazzati_app;
+```
+
+AUDIT LOGGING:
+```sql
+-- Audit log table
+CREATE TABLE audit_log (
+    id SERIAL PRIMARY KEY,
+    table_name VARCHAR(255) NOT NULL,
+    operation VARCHAR(10) NOT NULL,
+    old_values JSONB,
+    new_values JSONB,
+    user_name VARCHAR(255),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Audit trigger per tutte le table
+CREATE TRIGGER audit_trigger AFTER INSERT OR UPDATE OR DELETE
+ON your_table FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
+```
+
+SECURITY MONITORING:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AUTOMATED SECURITY CHECKS:
+• Log analysis per attack patterns
+• Failed authentication monitoring
+• Resource usage anomaly detection
+• SSL certificate expiration alerts
+
+SECURITY ALERTS PROMETHEUS:
+```yaml
+- alert: HighFailedLoginRate
+  expr: increase(auth_failed_login_total[5m]) > 10
+  labels:
+    severity: warning
+  annotations:
+    summary: "High failed login rate detected"
+
+- alert: UnauthorizedAPIAccess  
+  expr: increase(http_requests_total{status=~"401|403"}[5m]) > 20
+  labels:
+    severity: critical
+  annotations:
+    summary: "High unauthorized access attempts"
+```
+
+SECURITY MONITORING CONTAINER:
+```yaml
+security-monitor:
+  image: alpine:latest
+  command: >
+    sh -c "while true; do
+      ERRORS=$$(tail -100 /logs/backend/error.log | grep -i 'error\|fail\|unauthorized' | wc -l);
+      if [ $$ERRORS -gt 10 ]; then
+        echo 'ALERT: High error rate detected';
+      fi;
+      sleep 300;
+    done"
+```
+
+CREDENTIAL MANAGEMENT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECURE PASSWORD GENERATION:
+```bash
+# JWT Secret (48 characters)
+openssl rand -base64 48 | tr -d "=+/" | cut -c1-48
+
+# Database passwords (32 characters)
+openssl rand -base64 32 | tr -d "=+/" | cut -c1-32
+
+# API keys (32 characters)
+openssl rand -base64 32 | tr -d "=+/" | cut -c1-32
+```
+
+ENVIRONMENT SECURITY:
+```bash
+# Production environment variables
+JWT_SECRET_KEY=secure_generated_48_char_secret
+API_SECRET_KEY=secure_generated_32_char_api_key
+GRAFANA_SECRET_KEY=secure_generated_32_char_grafana_key
+
+# Security settings
+SESSION_COOKIE_SECURE=true
+SESSION_COOKIE_HTTPONLY=true
+SESSION_COOKIE_SAMESITE=strict
+CORS_ALLOW_CREDENTIALS=true
+```
+
+STORAGE SECURITY:
+• Encrypted environment files
+• GitHub Secrets per CI/CD
+• Scaleway Secret Manager integration
+• Backup encryption con gpg
+
+COMPLIANCE & BEST PRACTICES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECURITY STANDARDS:
+• OWASP Top 10 mitigation
+• CIS Docker Benchmark compliance
+• GDPR data protection ready
+• SOC 2 controls implementation
+
+SECURITY CHECKLIST:
+☐ Change all default passwords
+☐ Configure real SSL certificates (not self-signed)
+☐ Update admin IP in security groups
+☐ Enable database audit logging
+☐ Configure fail2ban rules
+☐ Set up security monitoring dashboard
+☐ Test backup and restore procedures
+☐ Configure intrusion detection system
+☐ Implement log rotation
+☐ Set up automated security updates
+
+SECURITY TESTING:
+```bash
+# SSL/TLS testing
+nmap --script ssl-enum-ciphers -p 443 piazzati.yourdomain.com
+
+# Security headers check
+curl -I https://api.piazzati.yourdomain.com
+
+# Rate limiting testing
+for i in {1..100}; do curl https://api.piazzati.yourdomain.com/api/test; done
+
+# SQL injection testing (with permission)
+sqlmap -u "https://api.piazzati.yourdomain.com/api/endpoint?param=test"
+```
+
+INCIDENT RESPONSE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECURITY INCIDENT PROCEDURE:
+1. Identify threat scope (logs analysis)
+2. Isolate affected systems (security groups)
+3. Preserve evidence (log backup)
+4. Contain threat (block IPs, disable accounts)
+5. Eradicate threat (patch vulnerabilities)
+6. Recover systems (from secure backups)
+7. Lessons learned (update security policies)
+
+EMERGENCY CONTACTS:
+• Security Team: security@yourdomain.com
+• Scaleway Support: Enterprise support ticket
+• Database Admin: dba@yourdomain.com
+• Infrastructure Team: infrastructure@yourdomain.com
+
+SECURITY MAINTENANCE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MONTHLY TASKS:
+• Review access logs per anomalies
+• Update SSL certificates se necessario
+• Review user access permissions
+• Security vulnerability assessment
+• Penetration testing (external)
+• Backup testing e validation
+
+QUARTERLY TASKS:
+• Security policies review
+• Disaster recovery testing
+• Security training per team
+• Compliance audit preparation
+• Security tools evaluation
+
+AUTOMATION SECURITY:
+• Dependency scanning in CI/CD
+• Container image vulnerability scanning
+• Infrastructure as Code security validation
+• Automated security testing in pipeline
+☐ Backup schedule configuration
+☐ Monitoring threshold adjustment
+☐ Performance baseline establishment
+☐ Security scan validation
+☐ Disaster recovery test procedure

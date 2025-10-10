@@ -1,0 +1,99 @@
+{
+  "name": "piazzati-lb-prod",
+  "description": "Production Load Balancer per PiazzaTi con SSL/TLS termination",
+  "tags": ["piazzati", "production", "https"],
+  
+  "ip_type": "ipv4",
+  "assign_flexible_ip": true,
+  "assign_flexible_ipv6": false,
+  
+  "type": "LB-S",
+  "ssl_compatibility_level": "ssl_compatibility_level_modern",
+  
+  "frontend": [
+    {
+      "name": "piazzati-https-frontend",
+      "inbound_port": 443,
+      "backend": "piazzati-backend-pool",
+      "timeout_client": "30s",
+      "certificate_ids": ["$SCALEWAY_SSL_CERT_ID"],
+      "enable_http3": true
+    },
+    {
+      "name": "piazzati-http-redirect",
+      "inbound_port": 80,
+      "backend": "piazzati-redirect-backend",
+      "timeout_client": "10s"
+    },
+    {
+      "name": "grafana-https-frontend", 
+      "inbound_port": 3000,
+      "backend": "grafana-backend-pool",
+      "timeout_client": "60s",
+      "certificate_ids": ["$SCALEWAY_SSL_CERT_ID"]
+    }
+  ],
+  
+  "backend": [
+    {
+      "name": "piazzati-backend-pool",
+      "forward_protocol": "http",
+      "forward_port": 8000,
+      "forward_port_algorithm": "roundrobin",
+      "sticky_sessions": "none",
+      "sticky_sessions_cookie_name": "",
+      "health_check": {
+        "port": 8000,
+        "check_delay": "10s",
+        "check_timeout": "5s",
+        "check_max_retries": 3,
+        "check_send_proxy": false,
+        "tcp_config": {},
+        "http_config": {
+          "uri": "/health",
+          "method": "GET",
+          "code": 200,
+          "host_header": "api.piazzati.yourdomain.com"
+        }
+      },
+      "server_ip": ["$SCALEWAY_CONTAINER_IP_1", "$SCALEWAY_CONTAINER_IP_2"]
+    },
+    {
+      "name": "piazzati-redirect-backend",
+      "forward_protocol": "http",
+      "forward_port": 80,
+      "forward_port_algorithm": "roundrobin",
+      "redirect_location": "https://piazzati.yourdomain.com$request_uri",
+      "redirect_status_code": 301
+    },
+    {
+      "name": "grafana-backend-pool",
+      "forward_protocol": "http", 
+      "forward_port": 3000,
+      "forward_port_algorithm": "roundrobin",
+      "sticky_sessions": "cookie",
+      "sticky_sessions_cookie_name": "grafana_session",
+      "health_check": {
+        "port": 3000,
+        "check_delay": "15s",
+        "check_timeout": "10s", 
+        "check_max_retries": 3,
+        "http_config": {
+          "uri": "/api/health",
+          "method": "GET",
+          "code": 200,
+          "host_header": "grafana.piazzati.yourdomain.com"
+        }
+      },
+      "server_ip": ["$GRAFANA_CONTAINER_IP"]
+    }
+  ],
+  
+  "certificate": {
+    "type": "custom",
+    "custom_certificate": {
+      "certificate_chain": "$SSL_CERTIFICATE_CHAIN", 
+      "private_key": "$SSL_PRIVATE_KEY"
+    }
+  }
+}

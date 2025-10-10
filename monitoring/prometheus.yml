@@ -3,8 +3,7 @@ global:
   evaluation_interval: 15s
 
 rule_files:
-  # - "first_rules.yml"
-  # - "second_rules.yml"
+  - "alert-rules.yml"
 
 scrape_configs:
   # Prometheus stesso
@@ -27,7 +26,16 @@ scrape_configs:
     scrape_interval: 30s
     scrape_timeout: 10s
 
-  # Node Exporter (se necessario per metriche sistema)
-  # - job_name: 'node'
-  #   static_configs:
-  #     - targets: ['node-exporter:9100']
+  # Node Exporter per metriche di sistema
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # cAdvisor per metriche container Docker
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 15s
+    scrape_timeout: 10s

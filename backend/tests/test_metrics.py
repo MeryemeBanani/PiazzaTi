@@ -53,7 +53,7 @@ def test_metrics_endpoint():
         
         # Verifica presenza metriche chiave
         metrics_text = response.text
-        assert "piazzati_requests_1_total" in metrics_text  # Le nostre metriche custom
+        assert "piazzati_custom_requests_1_total" in metrics_text  # Le nostre metriche custom
         assert "http_server" in metrics_text  # Metriche automatiche OpenTelemetry
         assert "python_gc" in metrics_text  # Metriche Python standard
 

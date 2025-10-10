@@ -1,44 +1,165 @@
-name: CI
+name: PiazzaTi CI/CD
 
 on:
   push:
-    branches: [ main,dev,feature/* ]
+    branches: [ main, dev, feature/* ]
   pull_request:
     branches: [ main ]
 
+env:
+  REGISTRY: rg.fr-par.scw.cloud/piazzati
+  BACKEND_IMAGE: piazzati-backend
+  FRONTEND_IMAGE: piazzati-frontend
+
 jobs:
-  build:
+  test:
+    name: Test & Lint
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:15
+        image: pgvector/pgvector:pg15
         env:
-          POSTGRES_USER: skilly
-          POSTGRES_PASSWORD: skilly
-          POSTGRES_DB: skilly
+          POSTGRES_USER: piazzati_user
+          POSTGRES_PASSWORD: piazzati_password
+          POSTGRES_DB: db_piazzati
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+          --health-cmd "pg_isready -U piazzati_user -d db_piazzati" 
+          --health-interval 10s 
+          --health-timeout 5s 
+          --health-retries 5
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - name: Install dependencies
+          python-version: '3.13'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install backend dependencies
         run: |
           cd backend
           pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Lint
+
+      - name: Lint backend code
         run: |
           cd backend
-          flake8 app
-      - name: Test
+          flake8 app --max-line-length=88 --extend-ignore=E203,W503
+
+      - name: Run backend tests
+        env:
+          DATABASE_URL: postgresql://piazzati_user:piazzati_password@localhost:5432/db_piazzati
         run: |
           cd backend
-          pytest
-      - name: Build Docker image
+          pytest tests/ -v --tb=short
+
+      - name: Test Docker build
         run: |
-          docker build -t skilly-backend ./backend
+          docker build -t ${{ env.BACKEND_IMAGE }}:test ./backend
+
+  build-and-deploy:
+    name: Build & Deploy to Scaleway
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Scaleway Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: rg.fr-par.scw.cloud
+          username: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
+          password: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to Scaleway Instance
+        env:
+          SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          # Setup SSH key
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+          
+          # Deploy via SSH
+          ssh -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP << 'EOF'
+            # Update repository
+            cd /opt/piazzati || git clone https://github.com/MeryemeBanani/PiazzaTi.git /opt/piazzati
+            cd /opt/piazzati
+            git pull origin main
+            
+            # Login to registry and pull latest images
+            echo "${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}" | docker login rg.fr-par.scw.cloud -u nologin --password-stdin
+            docker compose pull piazzati-backend
+            
+            # Deploy with production config
+            cp backend/.env.scaleway backend/.env
+            docker compose up -d --build
+            
+            # Health check
+            sleep 30
+            curl -f http://localhost:8000/health || exit 1
+          EOF
+
+  security-scan:
+    name: Security Scan
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './backend'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'

@@ -1,113 +1,166 @@
-{
-  "id": null,
-  "title": "PiazzaTi Monitoring Dashboard",
-  "tags": ["piazzati"],
-  "style": "dark",
-  "timezone": "browser",
-  "panels": [
-    {
-      "id": 1,
-      "title": "Request Rate",
-      "type": "stat",
-      "targets": [
-        {
-          "expr": "rate(piazzati_custom_requests_1_total[5m])",
-          "refId": "A"
-        }
-      ],
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps"
-        }
-      }
+﻿{
+  "dashboard": {
+    "id": null,
+    "title": "PiazzaTi MVP Dashboard",
+    "tags": ["piazzati", "mvp"],
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
     },
-    {
-      "id": 2,
-      "title": "Response Time P95",
-      "type": "stat",
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, rate(http_server_duration_ms_bucket[5m]))",
-          "refId": "A"
-        }
-      ],
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms"
-        }
-      }
-    },
-    {
-      "id": 3,
-      "title": "Response Time P99",
-      "type": "stat",
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.99, rate(http_server_duration_ms_bucket[5m]))",
-          "refId": "A"
-        }
-      ],
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms"
-        }
-      }
-    },
-    {
-      "id": 4,
-      "title": "Database Operations",
-      "type": "graph",
-      "targets": [
-        {
-          "expr": "rate(piazzati_custom_database_operations_1_total[5m])",
-          "refId": "A",
-          "legendFormat": "DB Operations/sec"
-        }
-      ],
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
-    },
-    {
-      "id": 5,
-      "title": "PostgreSQL Connections",
-      "type": "stat",
-      "targets": [
-        {
-          "expr": "pg_stat_database_numbackends{datname=\"db_piazzati\"}",
-          "refId": "A"
-        }
-      ],
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        }
-      }
-    },
-    {
-      "id": 6,
-      "title": "Query Performance",
-      "type": "graph",
-      "targets": [
-        {
-          "expr": "rate(pg_stat_database_tup_fetched{datname=\"db_piazzati\"}[5m])",
-          "refId": "A",
-          "legendFormat": "Tuples Fetched/sec"
+    "panels": [
+      {
+        "id": 1,
+        "title": "CPU App Normalized (%)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(process_cpu_seconds_total{job=\"piazzati-backend\"}[5m])*100",
+            "legendFormat": "CPU App %",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 50},
+                {"color": "orange", "value": 75},
+                {"color": "red", "value": 90}
+              ]
+            },
+            "unit": "percent",
+            "max": 100,
+            "min": 0
+          }
         },
-        {
-          "expr": "rate(pg_stat_database_tup_inserted{datname=\"db_piazzati\"}[5m])",
-          "refId": "B",
-          "legendFormat": "Tuples Inserted/sec"
-        }
-      ],
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
-    }
-  ],
-  "time": {
-    "from": "now-1h",
-    "to": "now"
+        "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 }
+      },
+      {
+        "id": 2,
+        "title": "Latency P95 (ms)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_server_duration_ms_bucket{job=\"piazzati-backend\"}[5m]))",
+            "legendFormat": "P95",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 200},
+                {"color": "orange", "value": 400},
+                {"color": "red", "value": 800}
+              ]
+            },
+            "unit": "ms"
+          }
+        },
+        "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 }
+      },
+      {
+        "id": 3,
+        "title": "Latency P99 (ms)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, rate(http_server_duration_ms_bucket{job=\"piazzati-backend\"}[5m]))",
+            "legendFormat": "P99",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 300},
+                {"color": "orange", "value": 600},
+                {"color": "red", "value": 1000}
+              ]
+            },
+            "unit": "ms"
+          }
+        },
+        "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 }
+      },
+      {
+        "id": 4,
+        "title": "Error Rate (%)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "(rate(piazzati_custom_database_operations_total{operation=\"test_query_error\"}[5m]) / rate(piazzati_custom_database_operations_total[5m])) * 100",
+            "legendFormat": "Error Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "orange", "value": 5},
+                {"color": "red", "value": 10}
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 }
+      },
+      {
+        "id": 5,
+        "title": "MVP Alerts Status",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_server_duration_ms_bucket{job=\"piazzati-backend\"}[5m])) > 400",
+            "legendFormat": "P95 > 400ms",
+            "format": "table",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(process_cpu_seconds_total{job=\"piazzati-backend\"}[5m]) * 100 > 75",
+            "legendFormat": "CPU > 75%",
+            "format": "table",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red", "value": 1}
+              ]
+            }
+          }
+        },
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 }
+      }
+    ]
   },
-  "refresh": "30s"
+  "overwrite": true
 }

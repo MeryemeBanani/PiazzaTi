@@ -1,0 +1,35 @@
+groups:
+  - name: piazzati-app-alerts
+    rules:
+      # Alert CPU App > 75% per 5 minuti
+      - alert: PiazzaTiHighCPU
+        expr: rate(process_cpu_seconds_total{job="piazzati-backend"}[5m]) / scalar(count(node_cpu_seconds_total{mode="idle"})) * 100 > 75
+        for: 5m
+        labels:
+          severity: warning
+          component: piazzati-backend
+        annotations:
+          summary: "PiazzaTi Backend High CPU Usage"
+          description: "PiazzaTi backend CPU usage is {{ $value }}% for more than 5 minutes"
+
+      # Alert RAM App > 80% (assumendo 512MB limite)
+      - alert: PiazzaTiHighMemory
+        expr: process_resident_memory_bytes{job="piazzati-backend"} / (512 * 1024 * 1024) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: piazzati-backend
+        annotations:
+          summary: "PiazzaTi Backend High Memory Usage"
+          description: "PiazzaTi backend memory usage is {{ $value }}% of 512MB limit for more than 5 minutes"
+
+      # Alert sistema CPU > 90% per 3 minuti
+      - alert: SystemHighCPU
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 3m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "System High CPU Usage"
+          description: "System CPU usage is {{ $value }}% for more than 3 minutes"

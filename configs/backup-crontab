@@ -1,0 +1,80 @@
+# =============================================================================
+# PIAZZATI BACKUP AUTOMATION - CRONTAB CONFIGURATION
+# =============================================================================
+# Configurazione cron per backup automatici su Scaleway Object Storage
+# File: configs/backup-crontab
+# =============================================================================
+
+# Environment variables per backup script
+SCALEWAY_S3_ACCESS_KEY=your_scaleway_s3_access_key
+SCALEWAY_S3_SECRET_KEY=your_scaleway_s3_secret_key
+DATABASE_URL=postgresql://user:pass@host:5432/db_piazzati
+GRAFANA_ADMIN_PASSWORD=your_grafana_admin_password
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# =============================================================================
+# BACKUP SCHEDULE CONFIGURATION
+# =============================================================================
+
+# Daily backup at 2:00 AM UTC
+# Full backup: database + Grafana + Prometheus
+0 2 * * * cd /opt/piazzati && ./scripts/backup-system.sh manual >> /var/log/piazzati/backup.log 2>&1
+
+# Weekly cleanup of old backups (Sunday at 3:00 AM)
+# Remove backups older than 30 days
+0 3 * * 0 cd /opt/piazzati && ./scripts/backup-system.sh cleanup >> /var/log/piazzati/backup-cleanup.log 2>&1
+
+# Health check every 6 hours
+# Verify backup system functionality
+0 */6 * * * cd /opt/piazzati && ./scripts/backup-system.sh list | grep -q "$(date +%Y%m%d)" || echo "ALERT: No backup found for today" | mail -s "PiazzaTi Backup Alert" admin@yourdomain.com
+
+# =============================================================================
+# ALTERNATIVE SCHEDULES (commentate)
+# =============================================================================
+
+# High-frequency backup (every 4 hours) - for critical environments
+#0 */4 * * * cd /opt/piazzati && ./scripts/backup-system.sh manual
+
+# Database-only backup every hour (business hours)
+#0 9-17 * * 1-5 cd /opt/piazzati && pg_dump $DATABASE_URL | gzip > /tmp/hourly_backup_$(date +\%H).sql.gz && aws s3 cp /tmp/hourly_backup_$(date +\%H).sql.gz s3://piazzati-backups/hourly/ --endpoint-url=https://s3.fr-par.scw.cloud
+
+# Monthly full system snapshot (1st day of month at 1:00 AM)
+#0 1 1 * * cd /opt/piazzati && ./scripts/backup-system.sh manual
+
+# =============================================================================
+# INSTALLATION INSTRUCTIONS
+# =============================================================================
+
+# 1. Install this crontab:
+#    crontab configs/backup-crontab
+
+# 2. Create log directory:
+#    sudo mkdir -p /var/log/piazzati
+#    sudo chown $USER:$USER /var/log/piazzati
+
+# 3. Test backup script:
+#    ./scripts/backup-system.sh manual
+
+# 4. Verify cron installation:
+#    crontab -l
+
+# 5. Monitor logs:
+#    tail -f /var/log/piazzati/backup.log
+
+# =============================================================================
+# LOG ROTATION CONFIGURATION
+# =============================================================================
+
+# Create /etc/logrotate.d/piazzati:
+# /var/log/piazzati/*.log {
+#     daily
+#     missingok
+#     rotate 30
+#     compress
+#     delaycompress
+#     notifempty
+#     sharedscripts
+#     postrotate
+#         # Optional: restart service if needed
+#     endscript
+# }

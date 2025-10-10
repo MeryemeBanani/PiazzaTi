@@ -1,0 +1,135 @@
+version: '3.8'
+
+# =============================================================================
+# PIAZZATI OBJECT STORAGE TEST ENVIRONMENT
+# =============================================================================
+# Testing environment per Scaleway Object Storage integration
+# Usage: docker-compose -f docker-compose.backup.yml up
+# =============================================================================
+
+services:
+  # MinIO S3-compatible storage per test locali
+  minio:
+    image: minio/minio:latest
+    container_name: piazzati-test-storage
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: piazzati_s3_user
+      MINIO_ROOT_PASSWORD: piazzati_s3_password_secure_123
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
+    ports:
+      - "9000:9000"    # S3 API
+      - "9001:9001"    # Web Console
+    volumes:
+      - minio_data:/data
+      - ./configs:/root/.minio/
+    networks:
+      - backup_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # AWS CLI container per test backup operations
+  backup-tester:
+    image: amazon/aws-cli:latest
+    container_name: piazzati-backup-tester
+    environment:
+      AWS_ACCESS_KEY_ID: piazzati_s3_user
+      AWS_SECRET_ACCESS_KEY: piazzati_s3_password_secure_123
+      AWS_REGION: fr-par-1
+      AWS_ENDPOINT_URL: http://minio:9000
+    volumes:
+      - ./scripts:/scripts
+      - ./configs:/configs
+      - backup_test_data:/backup
+    networks:
+      - backup_network
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command: -c "
+      echo 'Setting up test buckets...';
+      aws --endpoint-url=http://minio:9000 s3 mb s3://piazzati-backups || true;
+      aws --endpoint-url=http://minio:9000 s3 mb s3://piazzati-uploads || true;
+      echo 'Buckets created successfully';
+      echo 'Testing backup upload...';
+      echo 'Test backup content' > /backup/test-backup.txt;
+      aws --endpoint-url=http://minio:9000 s3 cp /backup/test-backup.txt s3://piazzati-backups/test/;
+      echo 'Listing bucket contents:';
+      aws --endpoint-url=http://minio:9000 s3 ls s3://piazzati-backups/test/;
+      echo 'Backup test completed successfully';
+      tail -f /dev/null
+      "
+
+  # PostgreSQL test database per backup testing
+  postgres-test:
+    image: pgvector/pgvector:pg15
+    container_name: piazzati-postgres-test
+    environment:
+      POSTGRES_DB: test_backup_db
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password_123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "5433:5432"    # Port diverso per non confliggere
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./database_schemas:/docker-entrypoint-initdb.d
+    networks:
+      - backup_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_backup_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backup scheduler per test automatici
+  backup-scheduler:
+    image: alpine:latest
+    container_name: piazzati-backup-scheduler
+    volumes:
+      - ./scripts:/scripts
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      DATABASE_URL: postgresql://test_user:test_password_123@postgres-test:5432/test_backup_db
+      SCALEWAY_S3_ACCESS_KEY: piazzati_s3_user
+      SCALEWAY_S3_SECRET_KEY: piazzati_s3_password_secure_123
+      S3_ENDPOINT: http://minio:9000
+      BACKUP_SCHEDULE: "*/5 * * * *"  # Every 5 minutes for testing
+    networks:
+      - backup_network
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command: >
+      sh -c "
+        apk add --no-cache docker-cli postgresql-client aws-cli curl;
+        echo 'Installing backup dependencies...';
+        chmod +x /scripts/backup-system.sh;
+        echo 'Setting up test cron job...';
+        echo '*/5 * * * * cd /scripts && ./backup-system.sh manual' | crontab -;
+        echo 'Starting cron daemon...';
+        crond -f -l 2
+      "
+
+volumes:
+  minio_data:
+    name: piazzati_minio_data
+  postgres_test_data:
+    name: piazzati_postgres_test_data
+  backup_test_data:
+    name: piazzati_backup_test_data
+
+networks:
+  backup_network:
+    name: piazzati_backup_network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
