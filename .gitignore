@@ -9,6 +9,15 @@ configs/*-security.env
 configs/app-security.env
 configs/grafana-security.env
 
+# Database export/dump
+database_schemas/*.json
+database_schemas/*.sql
+
+
+# Chiavi e certificati
+*.key
+*.pem
+
 # Cache Python
 __pycache__/
 *.py[cod]
