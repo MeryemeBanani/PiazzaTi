@@ -3,8 +3,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import get_db
 import os
-# Le variabili d'ambiente sono caricate da Docker Compose tramite env_file
-# OpenTelemetry imports
 from opentelemetry import trace, metrics
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.metrics import MeterProvider
@@ -18,13 +16,9 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-
-    # Le variabili d'ambiente sono caricate da Docker Compose tramite env_file
-
-# Setup OpenTelemetry con Resource configurato
 resource = Resource.create({
-    ResourceAttributes.SERVICE_NAME: "piazzati-backend",
-    ResourceAttributes.SERVICE_VERSION: "1.0.0",
+    "service.name": "piazzati-backend",
+    "service.version": "1.0.0"
 })
 
 prometheus_reader = PrometheusMetricReader(
