@@ -78,10 +78,8 @@ active_users = meter.create_up_down_counter(
     description="Number of active users tracked by custom counter",
     unit="1"
 )
-
-
+  
 # Creazione endpoint e gestione metriche
-
 
 
 @app.get("/")
