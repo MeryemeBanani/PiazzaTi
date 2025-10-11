@@ -9,17 +9,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v3
-      # Deploy via SSH su Scaleway
+
+      - name: Setup SSH key
+        run: |
+          echo "$SSH_PRIVATE_KEY" > key.pem
+          chmod 600 key.pem
+
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.SCALEWAY_INSTANCE_IP }}
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script: |
-            cd /opt/piazzati
-            git pull
-            docker compose up -d --build
+        run: |
+          ssh -i key.pem -o StrictHostKeyChecking=no root@${{ secrets.SCALEWAY_INSTANCE_IP }} "cd /app && git pull && docker compose up -d"
