@@ -79,8 +79,6 @@ active_users = meter.create_up_down_counter(
     unit="1"
 )
 
-# Creazione endpoint e gestione metriche
-
 
 @app.get("/")
 async def root(request: Request):
