@@ -1,8 +1,11 @@
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .document import Document
 from typing import Optional, Any
 import datetime
 import uuid
 
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, Text, Uuid, text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, Text, Uuid, text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.sqltypes import NullType
 from .base import Base
@@ -28,4 +31,4 @@ class Embedding(Base):
     updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
 
     # Relationships
-    document: Mapped[Optional['Document']] = relationship('Document', back_populates='embedding')
+    document: Mapped[Optional["Document"]] = relationship("Document", back_populates="embedding")

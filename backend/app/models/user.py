@@ -1,8 +1,12 @@
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .document import Document
+    from .search import Search
 from typing import Optional
 import datetime
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, String, Uuid, text, UniqueConstraint, PrimaryKeyConstraint, Enum
+from sqlalchemy import Boolean, DateTime, String, Uuid, text, UniqueConstraint, PrimaryKeyConstraint, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
@@ -27,5 +31,5 @@ class User(Base):
     company: Mapped[Optional[str]] = mapped_column(String)
 
     # Relationships
-    documents: Mapped[list['Document']] = relationship('Document', back_populates='user')
-    searches: Mapped[list['Search']] = relationship('Search', back_populates='user')
+    documents: Mapped[list["Document"]] = relationship("Document", back_populates="user")
+    searches: Mapped[list["Search"]] = relationship("Search", back_populates="user")

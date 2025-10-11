@@ -1,8 +1,12 @@
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .user import User
+    from .document import Document
 from typing import Optional, Any
 import datetime
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, Double, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, String, Uuid, text, Enum
+from sqlalchemy import Boolean, DateTime, Double, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, String, Uuid, text, Enum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.sqltypes import NullType
@@ -27,8 +31,8 @@ class Search(Base):
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
 
     # Relationships
-    user: Mapped[Optional['User']] = relationship('User', back_populates='searches')
-    search_results: Mapped[list['SearchResult']] = relationship('SearchResult', back_populates='search')
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="searches")
+    search_results: Mapped[list["SearchResult"]] = relationship("SearchResult", back_populates="search")
 
 
 class SearchResult(Base):
@@ -50,5 +54,5 @@ class SearchResult(Base):
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
 
     # Relationships
-    document: Mapped[Optional['Document']] = relationship('Document', back_populates='search_results')
-    search: Mapped[Optional['Search']] = relationship('Search', back_populates='search_results')
+    document: Mapped[Optional["Document"]] = relationship("Document", back_populates="search_results")
+    search: Mapped[Optional["Search"]] = relationship("Search", back_populates="search_results")

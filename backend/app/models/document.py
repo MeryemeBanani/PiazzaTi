@@ -1,8 +1,13 @@
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .user import User
+    from .embedding import Embedding
+    from .search import SearchResult
 from typing import Optional
 import datetime
 import uuid
 
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, String, Text, Uuid, text, Enum
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, String, Text, Uuid, text, Enum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
@@ -34,6 +39,6 @@ class Document(Base):
     status: Mapped[Optional[str]] = mapped_column(Enum('uploaded', 'parsed', 'parsing_failed', 'embedding_failed', 'draft', 'open', 'closed', name='document_status'))
 
     # Relationships
-    user: Mapped[Optional['User']] = relationship('User', back_populates='documents')
-    embedding: Mapped[Optional['Embedding']] = relationship('Embedding', uselist=False, back_populates='document')
-    search_results: Mapped[list['SearchResult']] = relationship('SearchResult', back_populates='document')
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="documents")
+    embedding: Mapped[Optional["Embedding"]] = relationship("Embedding", uselist=False, back_populates="document")
+    search_results: Mapped[list["SearchResult"]] = relationship("SearchResult", back_populates="document")
