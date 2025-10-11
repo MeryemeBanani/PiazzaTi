@@ -7,7 +7,7 @@ import datetime
 import uuid
 
 from sqlalchemy import Boolean, DateTime, Double, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, String, Uuid, text, Enum
-from sqlalchemy.dialects.postgresql import JSONB
+
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.sqltypes import NullType
 from .base import Base
@@ -16,10 +16,10 @@ from .base import Base
 class Search(Base):
     __tablename__ = 'searches'
     __table_args__ = (
-            ForeignKeyConstraint(
-                ['user_id'], ['users.id'], ondelete='CASCADE',
-                name='searches_user_id_fkey'
-            ),
+        ForeignKeyConstraint(
+            ['user_id'], ['users.id'], ondelete='CASCADE',
+            name='searches_user_id_fkey'
+        ),
         PrimaryKeyConstraint('id', name='searches_pkey'),
         Index('idx_searches_query_vector', 'query_vector'),
         Index('user_search_history_idx', 'user_id', 'created_at')
@@ -64,7 +64,7 @@ class SearchResult(Base):
             PrimaryKeyConstraint('id', name='search_results_pkey'),
             Index('search_rank_idx', 'search_id', 'rank')
     )
-    
+  
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     search_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
@@ -72,7 +72,12 @@ class SearchResult(Base):
     score: Mapped[Optional[float]] = mapped_column(Double(53))
     rank: Mapped[Optional[int]] = mapped_column(Integer)
     clicked: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
-    feedback: Mapped[Optional[str]] = mapped_column(String, comment='Valutazione esplicita dell\'utente')
+    feedback: Mapped[Optional[str]] = mapped_column(
+        String,
+        comment=(
+            "Valutazione esplicita dell'utente"
+        )
+    )
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
 
     # Relationships

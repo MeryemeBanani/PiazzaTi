@@ -7,7 +7,8 @@ from typing import Optional
 import datetime
 import uuid
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, String, Text, Uuid, text, Enum
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKeyConstraint, Index, Integer
+from sqlalchemy import String, Text, Uuid, text, Enum,PrimaryKeyConstraint,Integer
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
@@ -18,7 +19,8 @@ class Document(Base):
     __table_args__ = (
         CheckConstraint(
             "language::text ~ '^[a-z]{2}$'::text",
-            name='check_language_format'),
+            name='check_language_format'
+        ),
         ForeignKeyConstraint(
             ['user_id'], ['users.id'], ondelete='CASCADE',
             name='documents_user_id_fkey'),
