@@ -79,20 +79,22 @@ active_users = meter.create_up_down_counter(
     unit="1"
 )
 
- # Creazione endpoint e gestione metriche
+
+# Creazione endpoint e gestione metriche
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
-        return (
-                """
-                <html>
-                    <head><title>Sito in costruzione</title></head>
-                    <body style='text-align:center;'>
-                        <h1>Sito in costruzione</h1>
-                        <img src='/static/PIAZZATI.IT.png' alt='Sito in costruzione' style='max-width:400px;'>
-                    </body>
-                </html>
-                """
-        )
+    return (
+        """
+        <html>
+            <head><title>Sito in costruzione</title></head>
+            <body style='text-align:center;'>
+                <h1>Sito in costruzione</h1>
+                <img src='/static/PIAZZATI.IT.png' alt='Sito in costruzione' style='max-width:400px;'>
+            </body>
+        </html>
+        """
+    )
 
 
 @app.get("/metrics")
