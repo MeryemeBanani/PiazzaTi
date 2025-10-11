@@ -16,9 +16,10 @@ from .base import Base
 class Search(Base):
     __tablename__ = 'searches'
     __table_args__ = (
-        ForeignKeyConstraint(
-            ['user_id'], ['users.id'], ondelete='CASCADE',
-            name='searches_user_id_fkey'),
+            ForeignKeyConstraint(
+                ['user_id'], ['users.id'], ondelete='CASCADE',
+                name='searches_user_id_fkey'
+            ),
         PrimaryKeyConstraint('id', name='searches_pkey'),
         Index('idx_searches_query_vector', 'query_vector'),
         Index('user_search_history_idx', 'user_id', 'created_at')
@@ -32,7 +33,8 @@ class Search(Base):
         comment='Embedding semantico della query')
     filters: Mapped[Optional[dict]] = mapped_column(JSONB)
     type: Mapped[Optional[str]] = mapped_column(
-        Enum('cv_search', 'jd_search', name='search_type'))
+        Enum('cv_search', 'jd_search', name='search_type')
+    )
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime,
         server_default=text('now()'))
@@ -47,10 +49,16 @@ class Search(Base):
 class SearchResult(Base):
     __tablename__ = 'search_results'
     __table_args__ = (
-        ForeignKeyConstraint(['document_id'], ['documents.id'], ondelete='CASCADE', name='search_results_document_id_fkey'),
-        ForeignKeyConstraint(['search_id'], ['searches.id'], ondelete='CASCADE', name='search_results_search_id_fkey'),
-        PrimaryKeyConstraint('id', name='search_results_pkey'),
-        Index('search_rank_idx', 'search_id', 'rank')
+            ForeignKeyConstraint(
+                ['document_id'], ['documents.id'], ondelete='CASCADE',
+                name='search_results_document_id_fkey'
+            ),
+            ForeignKeyConstraint(
+                ['search_id'], ['searches.id'], ondelete='CASCADE',
+                name='search_results_search_id_fkey'
+            ),
+            PrimaryKeyConstraint('id', name='search_results_pkey'),
+            Index('search_rank_idx', 'search_id', 'rank')
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
@@ -67,4 +75,3 @@ class SearchResult(Base):
         "Document", back_populates="search_results")
     search: Mapped[Optional["Search"]] = relationship(
         "Search", back_populates="search_results")
-
