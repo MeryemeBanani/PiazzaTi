@@ -9,15 +9,13 @@ import os
 from opentelemetry import trace, metrics
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.semconv.resource import ResourceAttributes
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
-from prometheus_client import start_http_server, CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -33,22 +31,21 @@ resource = Resource.create({
 
 prometheus_reader = PrometheusMetricReader(
     disable_target_info=True  # Disabilita target_info che causa problemi di parsing
-) #raccoglie metriche in formato compatibile con Prometheus
+)
 meter_provider = MeterProvider(
     metric_readers=[prometheus_reader],
     resource=resource
-) #gestore metriche
-metrics.set_meter_provider(meter_provider) #imposto il provider globale
+)
+metrics.set_meter_provider(meter_provider)  # imposto il provider globale
 
-tracer_provider = TracerProvider() #tracce, ovvero come le richieste si propagano nell'app
-trace.set_tracer_provider(tracer_provider) #imposto il provider globale
+tracer_provider = TracerProvider()  # tracce, ovvero come le richieste si propagano nell'app
+trace.set_tracer_provider(tracer_provider)  # imposto il provider globale
 
 
 # Get meter and tracer dal modulo corrente "__name__"
 meter = metrics.get_meter(__name__)
 tracer = trace.get_tracer(__name__)
 
-#creo l'app FastAPI && monto i file statici
 app = FastAPI(title="PiazzaTi Backend", version="1.0.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -82,18 +79,20 @@ active_users = meter.create_up_down_counter(
     unit="1"
 )
 
-#creazione endpoint e gestione metriche 
+ # Creazione endpoint e gestione metriche
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    return """
-    <html>
-      <head><title>Sito in costruzione</title></head>
-      <body style="text-align:center;">
-        <h1>Sito in costruzione</h1>
-        <img src="/static/PIAZZATI.IT.png" alt="Sito in costruzione" style="max-width:400px;">
-      </body>
-    </html>
-    """
+        return (
+                """
+                <html>
+                    <head><title>Sito in costruzione</title></head>
+                    <body style='text-align:center;'>
+                        <h1>Sito in costruzione</h1>
+                        <img src='/static/PIAZZATI.IT.png' alt='Sito in costruzione' style='max-width:400px;'>
+                    </body>
+                </html>
+                """
+        )
 
 
 @app.get("/metrics")
@@ -112,8 +111,7 @@ async def health_check():
     return {
         "status": "healthy",
         "database_configured": bool(database_url),
-        "database_url_preview": (database_url[:30] + "..."
-                                 if database_url else None)
+        "database_url_preview": (database_url[:30] + "..." if database_url else None)
     }
 
 
@@ -121,7 +119,6 @@ async def health_check():
 async def test_database_connection(db: Session = Depends(get_db)):
     """Endpoint per testare la connessione al database"""
     request_count.add(1, {"endpoint": "/db-test", "method": "GET"})
-    
     try:
         # Esegui una query semplice per testare la connessione
         database_operations.add(1, {"operation": "test_query"})
