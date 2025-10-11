@@ -26,17 +26,20 @@ def test_health_endpoint():
         assert "status" in data
         assert data["status"] == "healthy"
 
-def test_root_endpoint():
-    """Test dell'endpoint root /"""
+@pytest.mark.parametrize(
+    "accept,expected_type",
+    [("application/json", dict), ("text/html", str)],
+)
+def test_root_endpoint_variants(accept, expected_type):
     with patch.dict(os.environ, {"DATABASE_URL": "postgresql://test:test@localhost:5432/test_db"}):
         from app.main import app
         client = TestClient(app)
-        
-        response = client.get("/")
+        response = client.get("/", headers={"accept": accept})
         assert response.status_code == 200
-        data = response.json()
-        assert "message" in data
-        assert "PiazzaTi Backend API" in data["message"]
+        if expected_type is dict:
+            assert response.json()["message"] == "Sito in costruzione"
+        else:
+            assert "<html>" in response.text
 
 def test_metrics_endpoint():
     """Test dell'endpoint /metrics"""
