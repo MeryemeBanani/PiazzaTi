@@ -2,9 +2,8 @@ from fastapi import FastAPI, Depends, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import get_db
-    # ...existing code...
 import os
-
+# Le variabili d'ambiente sono caricate da Docker Compose tramite env_file
 # OpenTelemetry imports
 from opentelemetry import trace, metrics
 from opentelemetry.sdk.trace import TracerProvider
