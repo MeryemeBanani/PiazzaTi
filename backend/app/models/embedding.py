@@ -6,7 +6,9 @@ import datetime
 import uuid
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKeyConstraint
-from sqlalchemy import Index, Integer, PrimaryKeyConstraint, Text, Uuid, text, UniqueConstraint
+from sqlalchemy import (
+    Index, Integer, PrimaryKeyConstraint, Text, Uuid, text, UniqueConstraint
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.sqltypes import NullType
 from .base import Base
@@ -21,7 +23,8 @@ class Embedding(Base):
         ),
         ForeignKeyConstraint(
             ['document_id'], ['documents.id'], ondelete='CASCADE',
-            name='embeddings_document_id_fkey'),
+            name='embeddings_document_id_fkey'
+        ),
         PrimaryKeyConstraint('id', name='embeddings_pkey'),
         UniqueConstraint('document_id', name='embeddings_document_id_key'),
         Index('embedding_ann_idx', 'embedding')

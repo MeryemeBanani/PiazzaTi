@@ -6,7 +6,10 @@ from typing import Optional
 import datetime
 import uuid
 
-from sqlalchemy import Boolean, DateTime, String, Uuid, text, UniqueConstraint, PrimaryKeyConstraint, Enum
+from sqlalchemy import (
+    Boolean, DateTime, String, Uuid, text, UniqueConstraint,
+    PrimaryKeyConstraint, Enum
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
