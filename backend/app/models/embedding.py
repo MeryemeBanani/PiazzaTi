@@ -32,7 +32,9 @@ class Embedding(Base):
         comment='Embedding SBERT MiniLM-L12-v2')
     model_name: Mapped[Optional[str]] = mapped_column(
         Text,
-        server_default=text("'sentence-transformers/MiniLM-L12-v2'::text"))
+        server_default=text(
+            "'sentence-transformers/MiniLM-L12-v2'::text"
+        ))
     model_dim: Mapped[Optional[int]] = mapped_column(
         Integer,
         server_default=text('384'))
