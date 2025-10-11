@@ -75,16 +75,41 @@ active_users = meter.create_up_down_counter(
 async def root(request: Request):
     accept = request.headers.get("accept", "")
     if "application/json" in accept:
-        return {"message": "Benvenuto su PiazzaTi!", "image": "/static/piazzati.gif"}
+        return {
+            "message": "Benvenuto su PiazzaTi!",
+            "image": "/static/piazzati.gif",
+            "fullscreen": True
+        }
     return HTMLResponse(
         """
         <html>
-            <head><title>PiazzaTi GIF</title></head>
-            <body style='text-align:center;'>
-                <h1>Benvenuto su PiazzaTi!</h1>
-                <img src='/static/piazzati.gif'
-                     alt='GIF animata PiazzaTi'
-                     style='max-width:400px;'>
+            <head>
+                <title>PiazzaTi GIF</title>
+                <style>
+                    html, body {
+                        height: 100%;
+                        margin: 0;
+                        padding: 0;
+                    }
+                    body {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        height: 100vh;
+                        width: 100vw;
+                        background: #222;
+                    }
+                    .full-gif {
+                        width: 100vw;
+                        height: 100vh;
+                        object-fit: cover;
+                        display: block;
+                        margin: 0 auto;
+                    }
+                </style>
+            </head>
+            <body>
+                <img src='/static/piazzati.gif' alt='GIF animata PiazzaTi' class='full-gif'>
             </body>
         </html>
         """
