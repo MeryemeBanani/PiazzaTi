@@ -30,8 +30,10 @@ class Search(Base):
     query_text: Mapped[Optional[str]] = mapped_column(String)
     query_vector: Mapped[Optional[Any]] = mapped_column(
         NullType,
-        comment='Embedding semantico della query')
-    filters: Mapped[Optional[dict]] = mapped_column(JSONB)
+        comment=(
+            'Embedding semantico della query'
+        )
+    )
     type: Mapped[Optional[str]] = mapped_column(
         Enum('cv_search', 'jd_search', name='search_type')
     )
@@ -41,9 +43,11 @@ class Search(Base):
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship(
-        "User", back_populates="searches")
+        "User", back_populates="searches"
+    )
     search_results: Mapped[list["SearchResult"]] = relationship(
-        "SearchResult", back_populates="search")
+        "SearchResult", back_populates="search"
+    )
 
 
 class SearchResult(Base):
@@ -60,6 +64,7 @@ class SearchResult(Base):
             PrimaryKeyConstraint('id', name='search_results_pkey'),
             Index('search_rank_idx', 'search_id', 'rank')
     )
+    
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     search_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
@@ -72,6 +77,8 @@ class SearchResult(Base):
 
     # Relationships
     document: Mapped[Optional["Document"]] = relationship(
-        "Document", back_populates="search_results")
+        "Document", back_populates="search_results"
+    )
     search: Mapped[Optional["Search"]] = relationship(
-        "Search", back_populates="search_results")
+        "Search", back_populates="search_results"
+    )
