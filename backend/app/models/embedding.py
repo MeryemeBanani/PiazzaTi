@@ -18,7 +18,8 @@ class Embedding(Base):
     __tablename__ = 'embeddings'
     __table_args__ = (
         CheckConstraint(
-            'abs(1.0::double precision - (embedding <#> embedding)) < 0.01::double precision',
+            'abs(1.0::double precision - (embedding <#> embedding)) '
+            '< 0.01::double precision',
             name='check_vector_normalized'
         ),
         ForeignKeyConstraint(
