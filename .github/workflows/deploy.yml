@@ -14,9 +14,28 @@ jobs:
 
       - name: Setup SSH key
         run: |
-          echo "$SSH_PRIVATE_KEY" > key.pem
-          chmod 600 key.pem
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SCALEWAY_INSTANCE_IP }} >> ~/.ssh/known_hosts
 
       - name: Deploy via SSH
         run: |
-          ssh -i key.pem -o StrictHostKeyChecking=no root@${{ secrets.SCALEWAY_INSTANCE_IP }} "cd /app && git pull && docker compose up -d"
+          ssh -tt -i ~/.ssh/id_rsa root@${{ secrets.SCALEWAY_INSTANCE_IP }} << 'EOF'
+            set -e
+            cd /opt/piazzati || git clone https://github.com/MeryemeBanani/PiazzaTi.git /opt/piazzati
+            cd /opt/piazzati
+            git pull origin main
+
+            echo "$SCALEWAY_REGISTRY_PASSWORD" | docker login rg.nl-ams.scw.cloud -u "$SCALEWAY_REGISTRY_USERNAME" --password-stdin
+            docker compose pull piazzati-backend
+
+            cp backend/.env.scaleway backend/.env
+            docker compose up -d --build
+
+            sleep 30
+            curl -f http://localhost:8000/health || exit 1
+          EOF
+        env:
+          SCALEWAY_REGISTRY_USERNAME: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
+          SCALEWAY_REGISTRY_PASSWORD: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
