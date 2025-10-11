@@ -1,11 +1,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
+    # ...existing code...
 import os
 
-# carica il file .env
-load_dotenv()
+    # Le variabili d'ambiente sono caricate da Docker Compose tramite env_file
 
 
 # ottengo l'URL del database dal .env

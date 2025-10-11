@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import get_db
-from dotenv import load_dotenv
+    # ...existing code...
 import os
 
 # OpenTelemetry imports
@@ -20,8 +20,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 
-# Carica le variabili dal file .env
-load_dotenv()
+    # Le variabili d'ambiente sono caricate da Docker Compose tramite env_file
 
 # Setup OpenTelemetry con Resource configurato
 resource = Resource.create({
