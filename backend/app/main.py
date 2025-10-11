@@ -82,19 +82,22 @@ active_users = meter.create_up_down_counter(
 
 # Creazione endpoint e gestione metriche
 
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    return (
+from fastapi import Request
+
+@app.get("/")
+async def root(request: Request):
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept:
+        return {"message": "Sito in costruzione", "image": "/static/PIAZZATI.IT.png"}
+    return HTMLResponse(
         """
         <html>
             <head><title>Sito in costruzione</title></head>
             <body style='text-align:center;'>
                 <h1>Sito in costruzione</h1>
-           <img src='/static/PIAZZATI.IT.png'
-               alt='Sito in costruzione'
-               style='max-width:400px;'>
-                 alt='Sito in costruzione'
-                 style='max-width:400px;'>
+                <img src='/static/PIAZZATI.IT.png'
+                     alt='Sito in costruzione'
+                     style='max-width:400px;'>
             </body>
         </html>
         """
