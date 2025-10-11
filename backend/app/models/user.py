@@ -26,12 +26,15 @@ class User(Base):
         Enum('candidate', 'recruiter', 'admin', name='user_role'),
         comment='Ruolo utente: candidate, recruiter, admin')
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
-        DateTime, server_default=text('now()'))
+        DateTime,
+        server_default=text('now()'))
     updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(
-        DateTime, server_default=text('now()'))
+        DateTime,
+        server_default=text('now()'))
     last_login: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
     is_active: Mapped[Optional[bool]] = mapped_column(
-        Boolean, server_default=text('true'))
+        Boolean,
+        server_default=text('true'))
     phone: Mapped[Optional[str]] = mapped_column(String)
     company: Mapped[Optional[str]] = mapped_column(String)
 

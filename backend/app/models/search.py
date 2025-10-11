@@ -28,12 +28,14 @@ class Search(Base):
     user_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     query_text: Mapped[Optional[str]] = mapped_column(String)
     query_vector: Mapped[Optional[Any]] = mapped_column(
-        NullType, comment='Embedding semantico della query')
+        NullType,
+        comment='Embedding semantico della query')
     filters: Mapped[Optional[dict]] = mapped_column(JSONB)
     type: Mapped[Optional[str]] = mapped_column(
         Enum('cv_search', 'jd_search', name='search_type'))
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
-        DateTime, server_default=text('now()'))
+        DateTime,
+        server_default=text('now()'))
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship(
