@@ -130,11 +130,11 @@ async def health_check():
     request_count.add(1, {"endpoint": "/health", "method": "GET"})
     database_url = os.getenv("DATABASE_URL")
     return {
-        "status": "healthy",
-        "database_configured": bool(database_url),
-        "database_url_preview": (
-            database_url[:30] + "..." if database_url else None
-        )
+            "status": "healthy",
+            "database_configured": bool(database_url),
+            "database_url_preview": (
+                database_url[:30] + "..." if database_url else None
+            )
     }
 
 
