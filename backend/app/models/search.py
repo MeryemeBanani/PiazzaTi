@@ -73,14 +73,20 @@ class SearchResult(Base):
     document_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     score: Mapped[Optional[float]] = mapped_column(Double(53))
     rank: Mapped[Optional[int]] = mapped_column(Integer)
-    clicked: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
+    clicked: Mapped[Optional[bool]] = mapped_column(
+        Boolean,
+        server_default=text('false')
+    )
     feedback: Mapped[Optional[str]] = mapped_column(
         String,
         comment=(
             "Valutazione esplicita dell'utente"
         )
     )
-    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
+    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime,
+        server_default=text('now()')
+    )
 
     # Relationships
     document: Mapped[Optional["Document"]] = relationship(

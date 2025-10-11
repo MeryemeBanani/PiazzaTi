@@ -46,7 +46,7 @@ class User(Base):
     )
     phone: Mapped[Optional[str]] = mapped_column(String)
     company: Mapped[Optional[str]] = mapped_column(String)
-  
+
     # Relationships
     documents: Mapped[list["Document"]] = relationship(
         "Document", back_populates="user"

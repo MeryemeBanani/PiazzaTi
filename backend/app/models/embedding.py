@@ -61,7 +61,7 @@ class Embedding(Base):
         DateTime,
         server_default=text('now()')
     )
-  
+
     # Relationships
     document: Mapped[Optional["Document"]] = relationship(
         "Document", back_populates="embedding"
