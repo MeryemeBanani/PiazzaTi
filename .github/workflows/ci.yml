@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 env:
-  REGISTRY: nl-ams.scw.cloud/backend
+  REGISTRY: rg.nl-ams.scw.cloud/piazzati/backend
   BACKEND_IMAGE: piazzati-backend
   FRONTEND_IMAGE: piazzati-frontend
 
@@ -85,7 +85,7 @@ jobs:
       - name: Log in to Scaleway Container Registry
         uses: docker/login-action@v3
         with:
-          registry: nl-ams.scw.cloud
+          registry: rg.nl-ams.scw.cloud
           username: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
           password: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
 
@@ -129,7 +129,7 @@ jobs:
             git pull origin main
             
             # Login to registry and pull latest images
-            echo "${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}" | docker login nl-ams.scw.cloud -u nologin --password-stdin
+            echo "${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}" | docker login rg.nl-ams.scw.cloud -u nologin --password-stdin
             docker compose pull piazzati-backend
             
             # Deploy with production config
