@@ -7,8 +7,8 @@ from typing import Optional
 import datetime
 import uuid
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKeyConstraint, Index, Integer
-from sqlalchemy import String, Text, Uuid, text, Enum,PrimaryKeyConstraint,Integer
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKeyConstraint, Index
+from sqlalchemy import String, Text, Uuid, text, Enum, PrimaryKeyConstraint, Integer
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
