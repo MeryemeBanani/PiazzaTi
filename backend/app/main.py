@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import get_db
@@ -82,7 +82,7 @@ active_users = meter.create_up_down_counter(
 
 # Creazione endpoint e gestione metriche
 
-from fastapi import Request
+
 
 @app.get("/")
 async def root(request: Request):
