@@ -18,6 +18,9 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
 from prometheus_client import start_http_server, CONTENT_TYPE_LATEST, generate_latest
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+
 
 # Carica le variabili dal file .env
 load_dotenv()
@@ -45,8 +48,9 @@ trace.set_tracer_provider(tracer_provider) #imposto il provider globale
 meter = metrics.get_meter(__name__)
 tracer = trace.get_tracer(__name__)
 
-#creo l'app FastAPI
+#creo l'app FastAPI && monto i file statici
 app = FastAPI(title="PiazzaTi Backend", version="1.0.0")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Instrument FastAPI automatically (per tracciare le richieste)
 FastAPIInstrumentor.instrument_app(app)
@@ -79,10 +83,17 @@ active_users = meter.create_up_down_counter(
 )
 
 #creazione endpoint e gestione metriche 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    request_count.add(1, {"endpoint": "/", "method": "GET"})
-    return {"message": "PiazzaTi Backend API"}
+    return """
+    <html>
+      <head><title>Sito in costruzione</title></head>
+      <body style="text-align:center;">
+        <h1>Sito in costruzione</h1>
+        <img src="/static/PIAZZATI.IT.png" alt="Sito in costruzione" style="max-width:400px;">
+      </body>
+    </html>
+    """
 
 
 @app.get("/metrics")
