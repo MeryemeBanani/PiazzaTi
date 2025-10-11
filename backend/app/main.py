@@ -77,8 +77,7 @@ async def root(request: Request):
     if "application/json" in accept:
         return {
             "message": "Benvenuto su PiazzaTi!",
-            "image": "/static/piazzati.gif",
-            "fullscreen": True
+            "image": "/static/PIAZZATI.IT.png"
         }
     return HTMLResponse(
         """
