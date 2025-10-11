@@ -75,15 +75,15 @@ active_users = meter.create_up_down_counter(
 async def root(request: Request):
     accept = request.headers.get("accept", "")
     if "application/json" in accept:
-        return {"message": "Sito in costruzione", "image": "/static/PIAZZATI.IT.png"}
+        return {"message": "Benvenuto su PiazzaTi!", "image": "/static/piazzati.gif"}
     return HTMLResponse(
         """
         <html>
-            <head><title>Sito in costruzione</title></head>
+            <head><title>PiazzaTi GIF</title></head>
             <body style='text-align:center;'>
-                <h1>Sito in costruzione</h1>
-                <img src='/static/PIAZZATI.IT.png'
-                     alt='Sito in costruzione'
+                <h1>Benvenuto su PiazzaTi!</h1>
+                <img src='/static/piazzati.gif'
+                     alt='GIF animata PiazzaTi'
                      style='max-width:400px;'>
             </body>
         </html>
