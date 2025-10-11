@@ -37,7 +37,7 @@ def test_root_endpoint_variants(accept, expected_type):
         response = client.get("/", headers={"accept": accept})
         assert response.status_code == 200
         if expected_type is dict:
-            assert response.json()["message"] == "Sito in costruzione"
+            assert response.json()["message"] == "Benvenuto su PiazzaTi!"
         else:
             assert "<html>" in response.text
 
