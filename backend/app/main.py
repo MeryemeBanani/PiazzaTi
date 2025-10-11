@@ -109,7 +109,11 @@ async def root(request: Request):
                 </style>
             </head>
             <body>
-                <img src='/static/piazzati.gif' alt='GIF animata PiazzaTi' class='full-gif'>
+                <img 
+                    src='/static/piazzati.gif' 
+                    alt='GIF animata PiazzaTi' 
+                    class='full-gif'
+                >
             </body>
         </html>
         """
