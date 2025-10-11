@@ -38,7 +38,7 @@ meter_provider = MeterProvider(
 )
 metrics.set_meter_provider(meter_provider)  # imposto il provider globale
 
-tracer_provider = TracerProvider()  # tracce, ovvero come le richieste si propagano nell'app
+tracer_provider = TracerProvider()  # tracce: richieste propagate nell'app
 trace.set_tracer_provider(tracer_provider)  # imposto il provider globale
 
 
@@ -90,7 +90,11 @@ async def root():
             <head><title>Sito in costruzione</title></head>
             <body style='text-align:center;'>
                 <h1>Sito in costruzione</h1>
-                <img src='/static/PIAZZATI.IT.png' alt='Sito in costruzione' style='max-width:400px;'>
+           <img src='/static/PIAZZATI.IT.png'
+               alt='Sito in costruzione'
+               style='max-width:400px;'>
+                 alt='Sito in costruzione'
+                 style='max-width:400px;'>
             </body>
         </html>
         """

@@ -16,8 +16,12 @@ from .base import Base
 class Document(Base):
     __tablename__ = 'documents'
     __table_args__ = (
-        CheckConstraint("language::text ~ '^[a-z]{2}$'::text", name='check_language_format'),
-        ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE', name='documents_user_id_fkey'),
+        CheckConstraint(
+            "language::text ~ '^[a-z]{2}$'::text",
+            name='check_language_format'),
+        ForeignKeyConstraint(
+            ['user_id'], ['users.id'], ondelete='CASCADE',
+            name='documents_user_id_fkey'),
         PrimaryKeyConstraint('id', name='documents_pkey'),
         Index('gin_parsed_json_idx', 'parsed_json'),
         Index('idx_jd_open_lang', 'language', 'created_at'),
@@ -25,11 +29,11 @@ class Document(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
-    is_latest: Mapped[bool] = mapped_column(Boolean, nullable=False,
-                                           server_default=text('false'))
+    is_latest: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text('false'))
     user_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
-    type: Mapped[Optional[str]] = mapped_column(Enum('cv', 'jd',
-                                                    name='document_type'))
+    type: Mapped[Optional[str]] = mapped_column(
+        Enum('cv', 'jd', name='document_type'))
     raw_file_url: Mapped[Optional[str]] = mapped_column(String)
     parsed_json: Mapped[Optional[dict]] = mapped_column(JSONB)
     language: Mapped[Optional[str]] = mapped_column(String(2))

@@ -14,8 +14,12 @@ from .base import Base
 class Embedding(Base):
     __tablename__ = 'embeddings'
     __table_args__ = (
-        CheckConstraint('abs(1.0::double precision - (embedding <#> embedding)) < 0.01::double precision', name='check_vector_normalized'),
-        ForeignKeyConstraint(['document_id'], ['documents.id'], ondelete='CASCADE', name='embeddings_document_id_fkey'),
+        CheckConstraint(
+            'abs(1.0::double precision - (embedding <#> embedding)) < 0.01::double precision',
+            name='check_vector_normalized'),
+        ForeignKeyConstraint(
+            ['document_id'], ['documents.id'], ondelete='CASCADE',
+            name='embeddings_document_id_fkey'),
         PrimaryKeyConstraint('id', name='embeddings_pkey'),
         UniqueConstraint('document_id', name='embeddings_document_id_key'),
         Index('embedding_ann_idx', 'embedding')

@@ -16,7 +16,9 @@ from .base import Base
 class Search(Base):
     __tablename__ = 'searches'
     __table_args__ = (
-        ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE', name='searches_user_id_fkey'),
+        ForeignKeyConstraint(
+            ['user_id'], ['users.id'], ondelete='CASCADE',
+            name='searches_user_id_fkey'),
         PrimaryKeyConstraint('id', name='searches_pkey'),
         Index('idx_searches_query_vector', 'query_vector'),
         Index('user_search_history_idx', 'user_id', 'created_at')
