@@ -77,46 +77,47 @@ async def root(request: Request):
     if "application/json" in accept:
         return {
             "message": "Benvenuto su PiazzaTi!",
-            "image": "/static/PIAZZATI.IT.png"
+            "image": "/static/PIAZZATI.IT.png",
+            "fullscreen": "true"
         }
-    return HTMLResponse(
-        """
-        <html>
-            <head>
-                <title>PiazzaTi GIF</title>
-                <style>
-                    html, body {
-                        height: 100%;
-                        margin: 0;
-                        padding: 0;
-                    }
-                    body {
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        height: 100vh;
-                        width: 100vw;
-                        background: #222;
-                    }
-                    .full-gif {
-                        width: 100vw;
-                        height: 100vh;
-                        object-fit: cover;
-                        display: block;
-                        margin: 0 auto;
-                    }
-                </style>
-            </head>
-            <body>
-                <img
-                    src='/static/piazzati.gif'
-                    alt='GIF animata PiazzaTi'
-                    class='full-gif'
-                >
-            </body>
-        </html>
-        """
-    )
+        return HTMLResponse(
+            """
+            <html>
+                <head>
+                    <title>PiazzaTi</title>
+                    <style>
+                        html, body {
+                            height: 100%;
+                            margin: 0;
+                            padding: 0;
+                        }
+                        body {
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            height: 100vh;
+                            width: 100vw;
+                            background: #222;
+                        }
+                        .full-img {
+                            width: 100vw;
+                            height: 100vh;
+                            object-fit: contain;
+                            display: block;
+                            margin: 0 auto;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <img
+                        src='/static/PIAZZATI.IT.png'
+                        alt='Immagine PiazzaTi'
+                        class='full-img'
+                    >
+                </body>
+            </html>
+            """
+        )
 
 
 @app.get("/metrics")
