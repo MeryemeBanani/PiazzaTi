@@ -84,6 +84,7 @@ async def root(request: Request):
         <html>
             <head>
                 <title>PiazzaTi</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <style>
                     html, body {
                         height: 100%;
@@ -95,6 +96,7 @@ async def root(request: Request):
                         width: 100vw;
                         background: #222;
                         overflow: hidden;
+                        position: relative;
                     }
                     .full-img {
                         position: absolute;
@@ -106,6 +108,15 @@ async def root(request: Request):
                         display: block;
                         margin: 0;
                         border: none;
+                        max-width: 100vw;
+                        max-height: 100vh;
+                    }
+                    @media (max-width: 600px) {
+                        .full-img {
+                            width: 100vw;
+                            height: 100vh;
+                            object-fit: contain;
+                        }
                     }
                 </style>
             </head>
