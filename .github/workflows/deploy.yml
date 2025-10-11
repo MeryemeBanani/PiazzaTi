@@ -8,8 +8,12 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+      SCALEWAY_REGISTRY_USERNAME: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
+      SCALEWAY_REGISTRY_PASSWORD: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Setup SSH key
@@ -17,25 +21,33 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SCALEWAY_INSTANCE_IP }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Deploy via SSH
         run: |
-          ssh -tt -i ~/.ssh/id_rsa root@${{ secrets.SCALEWAY_INSTANCE_IP }} << 'EOF'
+          ssh -tt -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP << 'EOF'
             set -e
+
+            # Clone or update repository
             cd /opt/piazzati || git clone https://github.com/MeryemeBanani/PiazzaTi.git /opt/piazzati
             cd /opt/piazzati
             git pull origin main
 
+            # Login to container registry
             echo "$SCALEWAY_REGISTRY_PASSWORD" | docker login rg.nl-ams.scw.cloud -u "$SCALEWAY_REGISTRY_USERNAME" --password-stdin
+
+            # Pull latest backend image
             docker compose pull piazzati-backend
 
+            # Apply production environment config
             cp backend/.env.scaleway backend/.env
+
+            # Deploy updated containers
             docker compose up -d --build
 
+            # Health check
             sleep 30
             curl -f http://localhost:8000/health || exit 1
           EOF
-        env:
-          SCALEWAY_REGISTRY_USERNAME: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
-          SCALEWAY_REGISTRY_PASSWORD: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
