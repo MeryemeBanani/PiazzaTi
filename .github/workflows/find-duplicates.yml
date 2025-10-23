@@ -2,6 +2,36 @@ name: find-duplicates
 
 on:
   workflow_dispatch:
+
+jobs:
+  find_dups:
+    runs-on: ubuntu-24.04
+    env:
+      SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+
+      - name: Run remote duplicate-size+name scan (low-output)
+        run: |
+          # Limit directories to scan and file size threshold to avoid heavy IO
+          DIRS="/root/.ollama /var/lib/docker /usr"
+          echo "Scanning ${DIRS} for large files with same name+size (cheap duplicate check)"
+          ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP '
+            set -euo pipefail
+            # find large files (>=1M), print size and path, sort by size desc, limit to top 2000 entries
+            find 'name: find-duplicates
+
+on:
+  workflow_dispatch:
   push:
     paths:
       - .github/workflows/find-duplicates.yml
