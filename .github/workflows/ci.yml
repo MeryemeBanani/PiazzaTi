@@ -145,7 +145,8 @@ jobs:
     name: Security Scan
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # Run on pull requests and also when pushing to main (so production pushes get scanned)
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     
     steps:
       - name: Checkout code
