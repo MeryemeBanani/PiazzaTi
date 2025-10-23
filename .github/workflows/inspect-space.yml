@@ -27,6 +27,15 @@ jobs:
           echo "Running lightweight disk inspection on remote host"
           ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -o TCPKeepAlive=yes -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP <<'EOF'
             set -euo pipefail
+            echo "===== lsblk ====="
+            lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT || true
+            echo
+            echo "===== blkid ====="
+            blkid || true
+            echo
+            echo "===== fdisk -l ====="
+            fdisk -l || true
+            echo
             echo "===== df -h ====="
             df -h /
             echo
