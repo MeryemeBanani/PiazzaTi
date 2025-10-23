@@ -1,0 +1,31 @@
+name: top-files-scan
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    env:
+      SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+
+      - name: List top files (non-destructive)
+        run: |
+          echo "Listing top files (bytes\tpath) in /root/.ollama, /var/lib/docker, /usr, /var - limited to top 200 lines"
+          ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP '
+            set -euo pipefail
+            CANDIDATES=(/root/.ollama /var/lib/docker /usr /var)
+            # find files (no writes), print size (bytes) and full path; sort and show top 200
+            find ${CANDIDATES[*]} -xdev -type f -printf "%s\t%p\n" 2>/dev/null | sort -nr | head -n 200 || true
+          '
