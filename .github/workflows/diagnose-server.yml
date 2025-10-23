@@ -1,0 +1,55 @@
+name: Diagnose Scaleway Server
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Run remote diagnostics (df, du, docker, journal, ollama)
+        run: |
+          ssh -tt -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP <<'EOF'
+            set -euo pipefail
+            echo "===== df -h ====="
+            df -h || true
+            echo "\n===== Top directories under / (depth=1) ====="
+            sudo du -xh --max-depth=1 / 2>/dev/null | sort -h || true
+            echo "\n===== Largest dirs (depth=2) ====="
+            sudo du -xh --max-depth=2 / 2>/dev/null | sort -h | tail -n 40 || true
+            echo "\n===== /var details ====="
+            sudo du -sh /var/* 2>/dev/null | sort -h || true
+            echo "\n===== apt cache size ====="
+            sudo du -sh /var/cache/apt 2>/dev/null || true
+            echo "\n===== docker system df ====="
+            docker system df 2>/dev/null || echo "docker not found or not running"
+            echo "\n===== docker images (top) ====="
+            docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.Size}}' 2>/dev/null || true
+            echo "\n===== journal disk usage ====="
+            sudo journalctl --disk-usage 2>/dev/null || echo "journalctl not available"
+            echo "\n===== ollama list ====="
+            if command -v ollama >/dev/null 2>&1; then
+              ollama list || echo "ollama list failed"
+            else
+              echo "ollama not installed"
+            fi
+            echo "\n===== find large files >100MB (top 40) ====="
+            sudo find / -xdev -type f -size +100M -exec ls -lh {} \; 2>/dev/null | awk '{print $5, $NF}' | sort -hr | head -n 40 || true
+          EOF
+        env:
+          # SSH_PRIVATE_KEY provided above
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
