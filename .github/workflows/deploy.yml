@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+  # allow manual runs from the Actions UI for immediate deploy/debug
+  workflow_dispatch: {}
 
 jobs:
   deploy:
@@ -12,6 +14,7 @@ jobs:
       SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
       SCALEWAY_REGISTRY_USERNAME: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
       SCALEWAY_REGISTRY_PASSWORD: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
+      OLLAMA_MODEL_NAME: ${{ secrets.OLLAMA_MODEL_NAME }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -34,6 +37,14 @@ jobs:
             cd /opt/piazzati || git clone https://github.com/MeryemeBanani/PiazzaTi.git /opt/piazzati
             cd /opt/piazzati
             git pull origin main
+
+            # Run server setup script (idempotent). Uses OLLAMA_MODEL_NAME secret if present.
+            if [ -f ./scripts/setup-server.sh ]; then
+              echo "[deploy] Running scripts/setup-server.sh (this is idempotent)"
+              MODEL_NAME="${OLLAMA_MODEL_NAME:-llama3.1:8b}" REPO_DIR="/opt/piazzati" ./scripts/setup-server.sh || echo "[deploy] setup-server.sh exited with non-zero status"
+            else
+              echo "[deploy] No scripts/setup-server.sh found — skipping server bootstrap"
+            fi
 
             # Login to container registry
             echo "$SCALEWAY_REGISTRY_PASSWORD" | docker login rg.nl-ams.scw.cloud -u "$SCALEWAY_REGISTRY_USERNAME" --password-stdin
