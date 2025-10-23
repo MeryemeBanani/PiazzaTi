@@ -14,6 +14,32 @@ echo "==========================================================================
 mkdir -p "${MARKER_DIR}"
 
 echo "[setup-server] Installing system packages (tesseract, poppler, curl)"
+# Wait for apt/dpkg locks to be free to avoid races with other package processes.
+wait_for_apt() {
+  local max_retries=24
+  local retry_interval=5
+  local i=0
+  while true; do
+    # check for common lock files
+    if [ ! -e /var/lib/dpkg/lock ] && [ ! -e /var/lib/dpkg/lock-frontend ] && [ ! -e /var/lib/apt/lists/lock ]; then
+      break
+    fi
+    # also check for apt/dpkg processes
+    if ! pgrep -x apt >/dev/null 2>&1 && ! pgrep -x apt-get >/dev/null 2>&1 && ! pgrep -x dpkg >/dev/null 2>&1; then
+      break
+    fi
+    i=$((i+1))
+    if [ ${i} -ge ${max_retries} ]; then
+      echo "[setup-server] Timeout waiting for apt/dpkg locks after $((max_retries * retry_interval))s"
+      break
+    fi
+    echo "[setup-server] apt/dpkg lock present — waiting ${retry_interval}s (${i}/${max_retries})"
+    sleep ${retry_interval}
+  done
+}
+
+wait_for_apt
+
 apt-get update -qq
 apt-get install -y tesseract-ocr tesseract-ocr-eng tesseract-ocr-ita poppler-utils curl
 
