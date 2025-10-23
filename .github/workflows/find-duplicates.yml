@@ -1,0 +1,79 @@
+name: find-duplicates
+
+on:
+  workflow_dispatch:
+
+jobs:
+  find-duplicates:
+    runs-on: ubuntu-24.04
+    env:
+      SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+
+      - name: Run duplicate finder (limited)
+        run: |
+          # Search for duplicate files by SHA256 within candidate dirs.
+          # Keep output small: show top 50 duplicate groups sorted by reclaimable size.
+          ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP '
+            set -euo pipefail
+            CANDIDATES=(/root/.ollama /var/lib/docker /usr /var)
+            TMPCMD="/tmp/dup_scan_$$.txt"
+            echo "Checking candidate dirs: ${CANDIDATES[*]}"
+            # Build a file list limited to files under candidates, exclude sockets, pipes
+            find ${CANDIDATES[*]} -type f -size +1k -readable -xdev -printf "%p\n" 2>/dev/null > /tmp/dup_files_list || true
+            # If no list or empty, exit gracefully
+            if [ ! -s /tmp/dup_files_list ]; then
+              echo "No files found in candidate dirs or no space to write temporary list."; exit 0
+            fi
+            # Compute sha256 for each file. Limit to first 20000 files to avoid full scan overload.
+            head -n 20000 /tmp/dup_files_list | xargs -d '\n' -r sha256sum 2>/dev/null > /tmp/dup_hashes || true
+            if [ ! -s /tmp/dup_hashes ]; then
+              echo "Failed to compute hashes or no readable files."; exit 0
+            fi
+            # Produce list: hash, size, path
+            awk '{print $1"  "$2}' /tmp/dup_hashes > /tmp/dup_hashes_short
+            # Map hash to files
+            awk '{print $1"  "$2}' /tmp/dup_hashes > /tmp/h  # reuse
+            # Build summary of duplicates and reclaimable size
+            python3 - <<'PY'
+import sys,subprocess
+from collections import defaultdict
+groups=defaultdict(list)
+with open('/tmp/dup_hashes') as f:
+    for line in f:
+        parts=line.strip().split(None,1)
+        if len(parts)<2: continue
+        h,rest=parts[0],parts[1]
+        # rest is path in sha256sum output
+        groups[h].append(rest)
+out=[]
+import os
+for h,paths in groups.items():
+    if len(paths)>1:
+        try:
+            sz=os.path.getsize(paths[0])
+        except Exception:
+            sz=0
+        reclaim=(len(paths)-1)*sz
+        out.append((reclaim,sz,len(paths),paths))
+out.sort(reverse=True)
+print('DUPLICATE GROUPS (top 50)')
+for reclaim,sz,count,paths in out[:50]:
+    print(f"reclaim={reclaim} bytes | file_size={sz} | count={count} | sample={paths[0]}")
+    for p in paths[:3]:
+        print('  -',p)
+print('TOTAL DUP GROUPS',len(out))
+PY
+            # cleanup tmp files
+            rm -f /tmp/dup_files_list /tmp/dup_hashes /tmp/dup_hashes_short /tmp/h || true
+          '
