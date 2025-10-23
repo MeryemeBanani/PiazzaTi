@@ -34,10 +34,16 @@ jobs:
           ssh -tt -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP <<EOF
             set -e
 
-            # Clone or update repository
-            cd /opt/piazzati || git clone https://github.com/MeryemeBanani/PiazzaTi.git /opt/piazzati
+            # Clone repository if missing, otherwise force-sync with origin/main
+            # NOTE: the following reset is destructive (it discards local changes on the server)
+            # This keeps the server in exact sync with the repo and avoids "local changes would be overwritten" errors
+            if [ ! -d /opt/piazzati ]; then
+              git clone https://github.com/MeryemeBanani/PiazzaTi.git /opt/piazzati
+            fi
             cd /opt/piazzati
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
 
             # Ensure setup script is executable and run it (idempotent)
             if [ -f ./scripts/setup-server.sh ]; then
