@@ -2,6 +2,10 @@ name: find-duplicates-safe
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - .github/workflows/find-duplicates-safe.yml
 
 jobs:
   find_dups:
