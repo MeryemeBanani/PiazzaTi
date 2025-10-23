@@ -30,7 +30,8 @@ jobs:
 
       - name: Deploy via SSH
         run: |
-          ssh -tt -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP << 'EOF'
+          # Use unquoted heredoc so runner expands secrets into the remote script
+          ssh -tt -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP <<EOF
             set -e
 
             # Clone or update repository
@@ -38,15 +39,17 @@ jobs:
             cd /opt/piazzati
             git pull origin main
 
-            # Run server setup script (idempotent). Uses OLLAMA_MODEL_NAME secret if present.
+            # Ensure setup script is executable and run it (idempotent)
             if [ -f ./scripts/setup-server.sh ]; then
+              echo "[deploy] Preparing scripts/setup-server.sh"
+              chmod +x ./scripts/setup-server.sh || true
               echo "[deploy] Running scripts/setup-server.sh (this is idempotent)"
-              MODEL_NAME="${OLLAMA_MODEL_NAME:-llama3.1:8b}" REPO_DIR="/opt/piazzati" ./scripts/setup-server.sh || echo "[deploy] setup-server.sh exited with non-zero status"
+              MODEL_NAME="${OLLAMA_MODEL_NAME:-llama3.1:8b}" REPO_DIR="/opt/piazzati" bash ./scripts/setup-server.sh || echo "[deploy] setup-server.sh exited with non-zero status"
             else
               echo "[deploy] No scripts/setup-server.sh found — skipping server bootstrap"
             fi
 
-            # Login to container registry
+            # Login to container registry (secrets expanded by runner)
             echo "$SCALEWAY_REGISTRY_PASSWORD" | docker login rg.nl-ams.scw.cloud -u "$SCALEWAY_REGISTRY_USERNAME" --password-stdin
 
             # Pull latest backend image
