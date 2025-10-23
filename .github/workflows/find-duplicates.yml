@@ -2,6 +2,9 @@ name: find-duplicates
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/find-duplicates.yml
 
 jobs:
   find-duplicates:
