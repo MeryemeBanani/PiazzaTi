@@ -41,6 +41,11 @@ jobs:
               git clone https://github.com/MeryemeBanani/PiazzaTi.git /opt/piazzati
             fi
             cd /opt/piazzati
+            # Try a small, safe cleanup to free disk: remove dangling docker objects and apt cache
+            echo "[deploy] attempting safe disk cleanup (docker prune & apt clean)"
+            docker system prune -af || true
+            rm -rf /var/cache/apt/archives/* || true
+
             git fetch origin main
             git reset --hard origin/main
             git clean -fd
