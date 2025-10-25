@@ -1999,6 +1999,60 @@ STEP 1: Ottenere credenziali Scaleway
 • Generare API Keys (Access Key + Secret Key)
 • Annotare Project ID
 
+--------------------------------------------------------------------------------
+AGGIORNAMENTO OPERAZIONI - MIGRAZIONE DOCKER & OLLAMA (2025-10-25)
+--------------------------------------------------------------------------------
+Di seguito un riepilogo delle operazioni eseguite il 2025-10-25 per migrare i dati
+di Docker e Ollama su volumi LVM dedicati, le verifiche effettuate e le raccomandazioni
+per la gestione operativa successiva.
+
+1) Scopo
+- Spostare i dati pesanti (Docker root e Ollama data-dir) su LVM per liberare spazio
+  su `/` e migliorare l'operatività del server.
+
+2) Operazioni principali effettuate
+- Creazione LVs per Docker e Ollama e sincronizzazione dei dati su di essi.
+- Risoluzione dei conflitti overlay2 (layerdb) tramite script helper e riavvio
+  controllato di Docker.
+- Backup prima della rimozione: creato tar su server e copiato off-host; SHA256
+  verificato (hash: 8250C2D3291019A518ECEC0BBCF7567F63B33C60C55A780854B919E29042D3C8).
+- Finalize: eseguito dry-run e poi `docker_migration_finalize.sh --finalize --yes` per
+  rimuovere i backup temporanei (.bak, docker-layerdb-backup-*).
+- Consolidamento mount Ollama: l'LV `piazza_vg-lv_ollama` è stato reso canonico su
+  `/usr/local/lib/ollama`; i vecchi mount duplicati sono stati smontati e sostituiti
+  con un symlink `/root/.ollama -> /usr/local/lib/ollama`.
+
+3) Verifiche e stato attuale
+- Docker: Engine attivo, containers funzionanti (7 container UP verificati).
+- Ollama: servizio systemd attivo e in ascolto su 127.0.0.1:11434; `ollama list`
+  risultava vuoto (nessun modello installato al momento).
+- Spazio disco: il filesystem root (`/dev/sda1`) è 8G; l'occupazione residua era
+  principalmente su `/usr` (~2.5G) e `/root` (~900MB prima della rimozione del tar).
+- LV per Ollama (`/dev/mapper/piazza_vg-lv_ollama`) è ~12G con ~5.5G liberi —
+  sufficiente per pullare modelli ~4-5GB ma raccomandato liberare ~1GB addizionale
+  prima del pull per margine di sicurezza.
+
+4) Comandi utili eseguiti
+- Dry-run finalize: `/opt/piazzati/scripts/docker_migration_finalize.sh --finalize --dry-run`
+- Finalize reale: `/opt/piazzati/scripts/docker_migration_finalize.sh --finalize --yes`
+- Consolidamento mount:
+  - `systemctl stop ollama`
+  - `umount /root/.ollama || true; umount /mnt/piazza_ollama || true`
+  - `rmdir /root/.ollama || true; ln -s /usr/local/lib/ollama /root/.ollama`
+  - `cp /etc/fstab /etc/fstab.bak; sed -i.bak -E 's|(^.*piazza_vg-lv_ollama.*$)|# \1|' /etc/fstab`
+  - `mount -a; systemctl start ollama`
+
+5) Raccomandazioni operative
+- Prima di eseguire `ollama pull <model>`: verificare `df -h /usr/local/lib/ollama`
+  e liberare spazio aggiuntivo (~1GB) se possibile (es. `apt-get clean`,
+  `journalctl --vacuum-size=200M`).
+- Integrare nel backend una routine di startup che verifichi la raggiungibilità di
+  Ollama e la presenza dei modelli necessari (endpoint /api/tags e `ollama list`).
+- Conservare la copia off-host del tar di backup per rollback e mantenere i backup
+  di `/etc/fstab` creati prima delle modifiche.
+
+
+
 STEP 2: Configurare servizi managed
 • Managed Database PostgreSQL 15 con pgvector
 • Managed Redis per caching
@@ -3026,3 +3080,54 @@ AUTOMATION SECURITY:
 ☐ Performance baseline establishment
 ☐ Security scan validation
 ☐ Disaster recovery test procedure
+
+===============================================================================
+INTEGRAZIONE OLLAMA (MODEL SERVER)
+===============================================================================
+
+Questa sezione descrive come integrare Ollama nel backend e come scaricare modelli
+in modo sicuro senza bloccare l'applicazione.
+
+1) Panoramica
+- Ollama è installato come servizio e ascolta su http://127.0.0.1:11434
+- I modelli risiedono in `/usr/local/lib/ollama` (LV dedicato). Verificare spazio
+
+2) File aggiunti al repository
+- `backend/requirements.txt` -> dipendenze Python (langchain, pytesseract, ecc.)
+- `backend/app/ollama_integration.py` -> helper non-bloccante per startup FastAPI
+- `scripts/pull_ollama_model.sh` -> script che verifica spazio e avvia `ollama pull`
+
+3) Come usare (sul server)
+- Verifica Ollama:
+  curl -sS http://127.0.0.1:11434/api/tags
+  ollama list
+
+- Eseguire il pull di un modello (esempio):
+  sudo /opt/piazzati/scripts/pull_ollama_model.sh "llama3.1:8b"
+  # o se hai copiato lo script in repo:
+  sudo ./scripts/pull_ollama_model.sh "llama3.1:8b"
+
+4) Logging
+- I log del pull vengono scritti in `/var/log/ollama-pulls/`.
+
+5) Integrazione backend (FastAPI)
+- Nel file `backend/app/ollama_integration.py` è presente `ensure_ollama_nonblocking(app)`;
+  richiama questa funzione nello startup event per impostare `app.state.ollama_ready` senza
+  bloccare l'avvio dell'applicazione.
+
+Esempio nello startup (app/main.py):
+```py
+from app.ollama_integration import ensure_ollama_nonblocking
+
+@app.on_event("startup")
+async def startup_event():
+    ensure_ollama_nonblocking(app)
+```
+
+6) Note operative
+- Prima di scaricare modelli grandi, assicurarsi di avere almeno 1.5–2GB di spazio libero
+  su `/usr/local/lib/ollama` (controlla con `df -h /usr/local/lib/ollama`).
+- Usare lo script di pull (systemd-run o tmux) per non bloccare la sessione SSH.
+- Conservare la copia off-host dei backup prima di eseguire operazioni distruttive.
+
+===============================================================================
