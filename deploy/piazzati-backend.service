@@ -1,0 +1,17 @@
+[Unit]
+Description=PiazzaTi backend (uvicorn)
+After=network.target
+
+[Service]
+User=piazzati
+Group=piazzati
+WorkingDirectory=/opt/piazzati/backend
+EnvironmentFile=/opt/piazzati/backend/.env
+ExecStart=/opt/piazzati/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --log-level info
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

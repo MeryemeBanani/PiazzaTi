@@ -1,0 +1,24 @@
+#!/bin/bash
+set -euo pipefail
+# Helper to stop stray uvicorns and start backend using the project venv and .env
+BASEDIR=/opt/piazzati/backend
+VENV="$BASEDIR/.venv"
+ENVFILE="$BASEDIR/.env"
+
+echo "Stopping stray uvicorn processes (if any)..."
+pkill -f 'uvicorn app.main' || true
+
+echo "Ensuring runtime packages in venv (psycopg2-binary + setuptools pinned)..."
+"$VENV/bin/pip" install --upgrade "psycopg2-binary>=2.9.11" "setuptools<81"
+
+echo "Starting uvicorn from venv with environment loaded..."
+# Load environment variables from ENVFILE (ignore comments/empty lines)
+set -a
+if [ -f "$ENVFILE" ]; then
+  # shellcheck disable=SC2046
+  eval "$(sed -n 's/^\s*#.*//; /^\s*$/d; s/\"/\\\"/g; s/^/export /; p' "$ENVFILE")"
+fi
+set +a
+
+nohup "$VENV/bin/uvicorn" app.main:app --host 127.0.0.1 --port 8000 --workers 1 --log-level info >/var/log/piazzati-backend.log 2>&1 &
+echo "uvicorn started (logs -> /var/log/piazzati-backend.log)." 
