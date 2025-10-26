@@ -1,3 +1,69 @@
+DOCUMENTAZIONE - Resoconto operativo (aggiornamento 2025-10-26)
+
+Questo file è stato aggiornato per registrare le operazioni eseguite per rendere il backend "PiazzaTi" stabile e riproducibile su server di produzione (venv + systemd + DB via Docker). Le note seguenti descrivono i passaggi effettuati, i file toccati, i comandi chiave e i prossimi step suggeriti.
+
+1) Obiettivi principali
+- Eseguire il backend FastAPI (uvicorn) in un virtualenv di progetto e gestirlo con systemd come servizio non-root.
+- Assicurare connettività stabile al database PostgreSQL eseguito via Docker Compose (mappato su porta host 5433).
+- Persistenza dello storage usato da Ollama e pull del modello `llama3.1:8b`.
+- Ripulire e installare le dipendenze Python (recovery di requirements corrotti).
+
+2) Azioni eseguite (sintesi)
+- Creazione del virtualenv di progetto: `/opt/piazzati/backend/.venv` e installazione dei pacchetti critici (in particolare `psycopg2-binary==2.9.11`).
+- Correzione del file di environment `/opt/piazzati/backend/.env`: la variabile `DATABASE_URL` è stata scritta con valore letterale (es. `postgresql://piazzati_user:piazzati_password@localhost:5433/db_piazzati`) perché systemd NON espande `${VAR}` in `EnvironmentFile`.
+- Aggiunta e deploy del systemd unit file per il backend (repo: `deploy/piazzati-backend.service`) che esegue uvicorn dal venv e usa `EnvironmentFile=/opt/piazzati/backend/.env`.
+- Identificazione e rimozione di processi uvicorn confliggenti; creazione dello script di amministrazione `deploy/restart_backend.sh` per stoppare processi errati e avviare il corretto.
+- Avvio / ripristino del container Postgres tramite `docker compose up -d postgres` (service mappa container port 5432 -> host 5433). Verificata la salute del container e apertura della porta host 5433.
+- Recupero/cleaning del file `requirements.clean.txt` (contenente NUL/UTF-16): generata una copia ripulita `requirements.clean.recovered.txt` e installate le dipendenze nel venv.
+
+3) Hardening systemd per evitare race a boot
+- Aggiunto drop-in `wait-db.conf` in `/etc/systemd/system/piazzati-backend.service.d/` con `ExecStartPre` che attende la presenza del bind sulla porta host 5433 (30s timeout). Questo previene l'avvio del backend prima che Docker abbia esposto la porta.
+- Aggiunto drop-in `restart.conf` con `Restart=on-failure` e `RestartSec=5` per stabilizzare i riavvii e prevenire flapping troppo rapido.
+
+4) Verifiche e output rilevanti
+- Endpoints verificati in esecuzione sul nodo host (via Uvicorn):
+  - GET http://127.0.0.1:8000/health  => restituisce JSON con campo `database_configured: true`.
+  - GET http://127.0.0.1:8000/db-test => restituisce {"status":"database_connected","result":"OK"}.
+- `psycopg2-binary` è presente nel venv: `/opt/piazzati/backend/.venv/lib/python3.12/site-packages`.
+- `setuptools` è stato pinned a versione `<81` (attualmente `80.9.0`) per ridurre avvisi da OpenTelemetry su `pkg_resources`.
+
+5) Warning residuo e diagnosi
+- OpenTelemetry nella fase di import mostra un avviso e una riga di log: `DependencyConflict: requested: "psycopg2 >= 2.7.3.1" but found: "None"`.
+  - Causa: `pkg_resources` cerca la distribuzione `psycopg2` via nome di package. Nel venv è installato `psycopg2-binary` (che fornisce il driver), ma `pkg_resources` può non mappare `psycopg2-binary` sul nome `psycopg2` e quindi segnala assenza. NON è bloccante — l'app funziona.
+  - Opzioni: (a) lasciare così, (b) installare `psycopg2` sorgente nel venv (richiede build deps: `libpq-dev`, headers), oppure (c) forzare reinstall di `psycopg2-binary` per rigenerare metadata. La scelta è stata rimandata; lo stato è documentato nel tracker.
+
+6) File modificati / creati
+- `/opt/piazzati/backend/.env` — riscritto con `DATABASE_URL` letterale.
+- `deploy/piazzati-backend.service` — unit systemd per il backend (ExecStart usa venv uvicorn path).
+- `/etc/systemd/system/piazzati-backend.service.d/wait-db.conf` — drop-in per attendere porta DB al boot.
+- `/etc/systemd/system/piazzati-backend.service.d/restart.conf` — drop-in per Restart policy.
+- `deploy/restart_backend.sh` — script helper per amministrazione avvio/stop del backend.
+- `requirements.clean.recovered.txt` — versione ripulita del requirements originale corrotta.
+
+7) Comandi principali (rapida copia)
+- Avviare Postgres via docker compose:
+  sudo docker compose up -d postgres
+- Pulire le requirements (esempio usato):
+  sudo /opt/piazzati/backend/.venv/bin/python3 /opt/piazzati/backend/scripts/clean_requirements.py
+- Installare dipendenze nel venv:
+  sudo /opt/piazzati/backend/.venv/bin/pip install -r /opt/piazzati/backend/requirements.clean.recovered.txt
+- Pin setuptools e reinstall driver:
+  sudo /opt/piazzati/backend/.venv/bin/pip install "setuptools<81"
+  sudo /opt/piazzati/backend/.venv/bin/pip install --force-reinstall psycopg2-binary
+- Configurare drop-in systemd (esempio):
+  sudo mkdir -p /etc/systemd/system/piazzati-backend.service.d
+  (creare file wait-db.conf e restart.conf come documentato sopra)
+  sudo systemctl daemon-reload && sudo systemctl restart piazzati-backend
+
+8) Next steps suggeriti (operativi)
+- (consigliato) Eseguire `pip install --force-reinstall psycopg2-binary` se si vuole rimuovere il warning opentelemetry.
+- Se si preferisce rimuovere il warning in modo definitivo installare `psycopg2` sorgente (richiede `libpq-dev` e strumenti di build): vedere sezione 5.
+- (opzionale) Aggiungere il drop-in `wait-db.conf` e `restart.conf` al repository sotto `deploy/` per tracciare le modifiche e deployarle su altri nodi.
+- (opzionale) Creare un test di integrazione CI che avvii Postgres in container addizionale, esegua il backend nel venv e verifichi `/db-test`.
+
+---
+Aggiornato: 2025-10-26
+
 PiazzaTi - Documentazione Progetto
 ================================
 
@@ -1598,6 +1664,28 @@ URL MONITORAGGIO:
 - PostgreSQL Exporter DB Metrics: http://localhost:9187/metrics
 
 Il sistema è ora enterprise-ready con monitoring completo per produzione! 🚀
+
+---
+Nota repository: file di deploy aggiunti
+-------------------------------------
+I file di deploy usati sul server sono stati aggiunti al repository nella cartella
+`deploy/` per avere una copia versionata dei systemd unit, dei drop-in e dello
+script di amministrazione. Controlla e adatta i percorsi (es. `/opt/piazzati/backend/.env`)
+prima di copiarli su macchine di produzione.
+
+- `deploy/piazzati-backend.service`  -> systemd unit template
+- `deploy/systemd/wait-db.conf`     -> drop-in ExecStartPre per attendere porta DB
+- `deploy/systemd/restart.conf`     -> drop-in con Restart policy
+- `deploy/restart_backend.sh`      -> helper script per fermare/avviare uvicorn
+- `backend/.env.example`           -> esempio .env (non contiene segreti)
+
+Per sincronizzare questi file sul server puoi:
+1) copiarli via `scp`/`rsync` dal tuo ambiente locale al server;
+2) eseguire `git pull` sul server se il repository è già presente lì;
+3) oppure creare manualmente i file sul server usando i contenuti presenti in `deploy/`.
+
+ATTENZIONE: NON committare file `.env` reali con credenziali. Usa `backend/.env.example`
+come template e mantieni i segreti fuori dal repository.
 
 ===============================================================================
 APPENDICE DEPLOYMENT PRODUZIONE SCALEWAY - CONFIGURAZIONI DETTAGLIATE

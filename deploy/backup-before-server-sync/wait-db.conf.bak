@@ -1,0 +1,6 @@
+[Unit]
+Description=Wait for Postgres host port to be available
+
+[Service]
+# ExecStartPre will wait up to ~30s for host port 5433 to be listening
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do ss -ltn | grep -q ":5433 " && exit 0 || sleep 1; done; echo "Timed out waiting for port 5433" >&2; exit 1'
