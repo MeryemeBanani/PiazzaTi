@@ -1,3 +1,23 @@
+## PiazzaTi systemd unit - deploy/piazzati-backend.service
+# This unit runs the project's uvicorn app using the project-local venv
+# ExecStart uses the venv python -m uvicorn form to avoid shebang/executable issues
+[Unit]
+Description=PiazzaTi backend (uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/piazzati/backend
+EnvironmentFile=/opt/piazzati/backend/.env
+ExecStart=/opt/piazzati/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
 [Unit]
 Description=PiazzaTi backend (uvicorn)
 After=network.target
