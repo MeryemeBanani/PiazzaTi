@@ -1,6 +1,4 @@
-
 {
-  "uid": "piazzati-mvp",
   "id": null,
   "title": "Piazzati - Overview",
   "tags": ["piazzati", "mvp"],
@@ -80,19 +78,34 @@
     {
       "type": "timeseries",
       "title": "Uptime (up)",
-      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 8 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 14 },
       "targets": [
         {
           "expr": "up{job=\"piazzati-backend\"}",
           "legendFormat": "{{instance}}",
           "refId": "A"
+        },
+        {
+          "expr": "rate(process_cpu_seconds_total{job=\"piazzati-backend\"}[5m]) * 100 > 75",
+          "legendFormat": "CPU > 75%",
+          "format": "table",
+          "refId": "B"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
     }
-  ],
-  "annotations": { "list": [] },
-  "links": [],
-  "gnetId": null
-
+  ]
 }
-
