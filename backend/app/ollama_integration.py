@@ -35,9 +35,11 @@ def list_models_cli() -> str:
 
 
 def ensure_ollama_nonblocking(app: FastAPI, retries: int = 3, wait: int = 2) -> bool:
-    """Try a few quick attempts to detect Ollama; set app.state flags and return readiness.
+    """Try a few quick attempts to detect Ollama; set app.state flags
+    and return readiness.
 
-    This MUST NOT block startup for long. Use small retries and mark state for the app.
+    This MUST NOT block startup for long. Use small retries and mark state
+    for the app.
     """
     ready = False
 
