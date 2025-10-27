@@ -1,0 +1,44 @@
+name: cleanup-minimal
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    env:
+      SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+
+      - name: Run minimal remote cleanup (low output)
+        run: |
+          # Run a short, minimal set of safe cleanup commands over SSH.
+          # Avoid writing to remote disk; minimize output to reduce risk of broken pipes.
+          ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP '
+            set -euxo pipefail
+            # clean apt caches
+            sudo apt-get clean || true
+            # remove apt lists and cache (safe to regenerate)
+            sudo rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/* || true
+            # prune stopped containers and dangling images
+            sudo docker container prune -f || true
+            sudo docker image prune -af || true
+            # prune builder cache which can be large
+            sudo docker builder prune -af || true
+            # remove potential orphaned docker tmp
+            sudo rm -rf /var/lib/docker/tmp/* || true
+            # free journal logs older than 2 days (if systemd-journald present)
+            if command -v journalctl >/dev/null 2>&1; then
+              sudo journalctl --vacuum-time=2d || true
+            fi
+          '

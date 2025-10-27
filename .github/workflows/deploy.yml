@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+  # allow manual runs from the Actions UI for immediate deploy/debug
+  workflow_dispatch: {}
 
 jobs:
   deploy:
@@ -12,6 +14,7 @@ jobs:
       SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
       SCALEWAY_REGISTRY_USERNAME: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
       SCALEWAY_REGISTRY_PASSWORD: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
+      OLLAMA_MODEL_NAME: ${{ secrets.OLLAMA_MODEL_NAME }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -27,15 +30,37 @@ jobs:
 
       - name: Deploy via SSH
         run: |
-          ssh -tt -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP << 'EOF'
+          # Use unquoted heredoc so runner expands secrets into the remote script
+          ssh -tt -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP <<EOF
             set -e
 
-            # Clone or update repository
-            cd /opt/piazzati || git clone https://github.com/MeryemeBanani/PiazzaTi.git /opt/piazzati
+            # Clone repository if missing, otherwise force-sync with origin/main
+            # NOTE: the following reset is destructive (it discards local changes on the server)
+            # This keeps the server in exact sync with the repo and avoids "local changes would be overwritten" errors
+            if [ ! -d /opt/piazzati ]; then
+              git clone https://github.com/MeryemeBanani/PiazzaTi.git /opt/piazzati
+            fi
             cd /opt/piazzati
-            git pull origin main
+            # Try a small, safe cleanup to free disk: remove dangling docker objects and apt cache
+            echo "[deploy] attempting safe disk cleanup (docker prune & apt clean)"
+            docker system prune -af || true
+            rm -rf /var/cache/apt/archives/* || true
 
-            # Login to container registry
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
+
+            # Ensure setup script is executable and run it (idempotent)
+            if [ -f ./scripts/setup-server.sh ]; then
+              echo "[deploy] Preparing scripts/setup-server.sh"
+              chmod +x ./scripts/setup-server.sh || true
+              echo "[deploy] Running scripts/setup-server.sh (this is idempotent)"
+              MODEL_NAME="${OLLAMA_MODEL_NAME:-llama3.1:8b}" REPO_DIR="/opt/piazzati" bash ./scripts/setup-server.sh || echo "[deploy] setup-server.sh exited with non-zero status"
+            else
+              echo "[deploy] No scripts/setup-server.sh found — skipping server bootstrap"
+            fi
+
+            # Login to container registry (secrets expanded by runner)
             echo "$SCALEWAY_REGISTRY_PASSWORD" | docker login rg.nl-ams.scw.cloud -u "$SCALEWAY_REGISTRY_USERNAME" --password-stdin
 
             # Pull latest backend image

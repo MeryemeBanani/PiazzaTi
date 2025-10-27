@@ -1,0 +1,39 @@
+name: show-devices
+
+on:
+  workflow_dispatch:
+
+jobs:
+  show:
+    runs-on: ubuntu-24.04
+    env:
+      SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+
+      - name: Show block devices (non-writing)
+        run: |
+          echo "Listing block devices, partitions, and mounts on remote host"
+          ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP bash -s <<'REMOTE'
+          set -euo pipefail
+          echo "===== lsblk ====="
+          lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT
+          echo
+          echo "===== blkid (if any) ====="
+          blkid || true
+          echo
+          echo "===== fdisk -l (if permitted) ====="
+          fdisk -l || true
+          echo
+          echo "===== /dev/disk/by-id ====="
+          ls -l /dev/disk/by-id || true
+REMOTE

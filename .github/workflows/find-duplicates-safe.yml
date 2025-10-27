@@ -1,0 +1,41 @@
+name: find-duplicates-safe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - .github/workflows/find-duplicates-safe.yml
+
+jobs:
+  find_dups:
+    runs-on: ubuntu-24.04
+    env:
+      SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+
+      - name: Remote cheap duplicate scan (size+basename, low output)
+        run: |
+          DIRS="/root/.ollama /var/lib/docker /usr /var"
+          echo "Scanning: ${DIRS} (files >=1M, grouping by size+basename). Non-destructive, low-output."
+          ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP 'bash -s' <<'REMOTE'
+            set -euo pipefail
+            CANDIDATES="/root/.ollama /var/lib/docker /usr /var"
+            # find large files (>=1M), print: size, basename, path
+            find $CANDIDATES -xdev -type f -size +1M -printf "%s\t%f\t%p\n" 2>/dev/null |
+              sort -nr |
+              head -n 5000 |
+              awk -F"\t" '{key=$1"\t"$2; cnt[key]++; if(cnt[key]<=10) sample[key]=sample[key]";"$3; size[key]=$1} END{for(k in cnt) if(cnt[k]>1) {split(k,a,"\t"); printf "%s\t%d\t%s\t%s\n", size[k], cnt[k], a[2], sample[k]}}' |
+              sort -nr |
+              head -n 50
+REMOTE

@@ -1,0 +1,82 @@
+name: Diagnose Scaleway Server
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      # NOTE: the original heavy diagnostic step was removed to avoid streaming huge output
+      # and causing SSH 'Broken pipe' errors. The safer step below writes a full log on the
+      # remote server and prints a concise head/tail summary instead.
+        - name: Run remote diagnostics (safe: write to file, show summary)
+          run: |
+            # Use SSH keepalive options to reduce chance of Broken pipe for long ops
+            ssh -tt -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -o TCPKeepAlive=yes -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP <<'EOF'
+              set -euo pipefail
+              TS=$(date +%s)
+              LOG=/tmp/diagnose-${TS}.log
+              echo "Writing full diagnostic to $LOG"
+              sudo sh -c 'cat >/tmp/diagnose-${TS}.log' <<'INNER'
+  $(cat <<'CMDS'
+  echo "===== df -h ====="
+  df -h || true
+
+  echo "===== top directories under / (depth=1) ====="
+  sudo du -xh --max-depth=1 / 2>/dev/null | sort -h || true
+
+  echo "===== /var breakdown ====="
+  sudo du -sh /var/* 2>/dev/null | sort -h || true
+
+  echo "===== apt cache size ====="
+  sudo du -sh /var/cache/apt 2>/dev/null || true
+
+  echo "===== docker system df ====="
+  docker system df 2>/dev/null || echo "docker not found or not running"
+
+  echo "===== docker images (top) ====="
+  docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.Size}}' 2>/dev/null || true
+
+  echo "===== journal disk usage ====="
+  if command -v journalctl >/dev/null 2>&1; then sudo journalctl --disk-usage || true; else echo "journalctl not available"; fi
+
+  echo "===== ollama list ====="
+  if command -v ollama >/dev/null 2>&1; then ollama list || echo "ollama list failed"; else echo "ollama not installed"; fi
+
+  # Start a background find to list large files (won't block the SSH session). Output saved to /tmp/large-files-<ts>.txt
+  LF=/tmp/large-files-${TS}.txt
+  echo "Starting background find for files >100MB (output -> $LF)"
+  nohup sudo find / -xdev -type f -size +100M -printf '%s %p\n' 2>/dev/null > "$LF" &
+
+  echo "DIAGNOSTIC_COMPLETED"
+  CMDS
+  )
+  INNER
+
+              # show short summary (head/tail) to logs so Actions gets useful info
+              echo "---- SUMMARY (head 200) ----"
+              sudo head -n 200 /tmp/diagnose-${TS}.log || true
+              echo "---- SUMMARY (tail 200) ----"
+              sudo tail -n 200 /tmp/diagnose-${TS}.log || true
+              echo "Full log: /tmp/diagnose-${TS}.log"
+              echo "Large-files list (partial):"
+              sudo head -n 200 /tmp/large-files-${TS}.txt || echo "Large-files not ready or empty"
+            EOF
+        env:
+          # SSH_PRIVATE_KEY provided above
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}

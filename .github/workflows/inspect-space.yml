@@ -1,0 +1,56 @@
+name: Inspect disk usage (non-writing)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+
+      - name: Run lightweight disk inspection (no remote writes)
+        env:
+          SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+        run: |
+          echo "Running lightweight disk inspection on remote host"
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -o TCPKeepAlive=yes -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP <<'EOF'
+            set -euo pipefail
+            echo "===== lsblk ====="
+            lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT || true
+            echo
+            echo "===== blkid ====="
+            blkid || true
+            echo
+            echo "===== fdisk -l ====="
+            fdisk -l || true
+            echo
+            echo "===== df -h ====="
+            df -h /
+            echo
+            echo "===== df -i (inodes) ====="
+            df -i /
+            echo
+            echo "===== Top directories by size (limited) ====="
+            # Use du but only print limited summary lines; no remote file writes
+            for d in /var/lib/docker/overlay2 /var/lib/docker /root/.ollama /var/log /usr /opt /home; do
+              if [ -d "$d" ]; then
+                du -s -BM "$d" 2>/dev/null || true
+              fi
+            done | sort -nr -k1 | head -n 20
+            echo
+            echo "===== Largest files under / (top 20, may be slow) ====="
+            # Find large files but print only top 20 results; traverse but don't write to disk
+            find / -xdev -type f -printf '%s %p\n' 2>/dev/null | sort -nr | head -n 20 | awk '{printf "%.2fMB %s\n", $1/1024/1024, $2}'
+          EOF
