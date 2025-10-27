@@ -1,0 +1,95 @@
+{
+  "uid": "piazzati-mvp",
+  "id": null,
+  "title": "Piazzati - Overview",
+  "tags": ["piazzati", "mvp"],
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "instance",
+        "label": "Host",
+        "datasource": "Prometheus",
+        "query": "label_values(up{job=\"piazzati-backend\"}, instance)",
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "current": { "text": "All", "value": "" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Requests/sec (1m)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (instance) (rate(http_requests_total{job=\"piazzati-backend\"}[1m]))",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency P95 (ms)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, instance) (rate(http_server_duration_ms_bucket{job=\"piazzati-backend\"}[5m])))",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms" } }
+    },
+    {
+      "type": "stat",
+      "title": "CPU App (%)",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum by (instance) (rate(process_cpu_seconds_total{job=\"piazzati-backend\"}[5m]) * 100)",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent" } }
+    },
+    {
+      "type": "stat",
+      "title": "Error Rate (%)",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
+      "targets": [
+        {
+          "expr": "100 * (sum by (instance) (rate(http_requests_total{job=\"piazzati-backend\", code=~\"5..\"}[5m])) / sum by (instance) (rate(http_requests_total{job=\"piazzati-backend\"}[5m])))",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Uptime (up)",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "up{job=\"piazzati-backend\"}",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "annotations": { "list": [] },
+  "links": [],
+  "gnetId": null
+}

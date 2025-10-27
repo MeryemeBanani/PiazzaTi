@@ -1,0 +1,53 @@
+name: top-files-scan-heap
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    env:
+      SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+
+      - name: Memory-safe top-N files scan (non-destructive)
+        run: |
+          echo "Running memory-safe top-N scan (N=200) on remote host - avoids sort temp files"
+          ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP bash -s <<'REMOTE'
+          set -euo pipefail
+          CANDIDATES=(/root/.ollama /var/lib/docker /usr /var)
+          N=200
+          for d in "${CANDIDATES[@]}"; do
+            if [ -d "$d" ]; then
+              find "$d" -xdev -type f -printf "%s\t%p\n" 2>/dev/null || true
+            fi
+          done | python3 - <<'PY'
+import sys, heapq
+N=200
+h=[]
+for line in sys.stdin:
+    try:
+        s_str, path = line.split('\t',1)
+        s=int(s_str)
+    except Exception:
+        continue
+    if len(h) < N:
+        heapq.heappush(h, (s, path))
+    else:
+        if s > h[0][0]:
+            heapq.heapreplace(h, (s, path))
+h.sort(reverse=True)
+for s,p in h:
+    sys.stdout.write(f"{s}\t{p}")
+PY
+REMOTE

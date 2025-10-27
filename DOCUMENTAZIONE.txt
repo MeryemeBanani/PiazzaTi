@@ -3219,3 +3219,95 @@ async def startup_event():
 - Conservare la copia off-host dei backup prima di eseguire operazioni distruttive.
 
 ===============================================================================
+
+AGGIORNAMENTO OPERAZIONI - 2025-10-27 (RECENTI 9 MODIFICHE)
+==============================================================================
+
+Breve elenco e descrizione delle 9 modifiche operative più recenti effettuate
+sul sistema di produzione/monitoring. Includo anche comandi pratici e raccomandazioni
+per riprodurre o completare le azioni sul server.
+
+1) Riparazione dashboard Grafana
+- Il file provisioning `monitoring/grafana/dashboards/piazzati-dashboard.json` era
+  corrotto e impediva a Grafana di caricare i dashboard. È stata estratta e
+  ripulita una versione valida (parziale) che rimuove l'errore di parsing.
+  Azione consigliata: sostituire il file corrotto con la versione completa e
+  validata (fornita nel repository o nel backup) e riavviare Grafana.
+
+2) Utility per ripulire JSON dashboard
+- Aggiunto utilitario `monitoring/grafana/scripts/fix_dashboard_json.py` che
+  rimuove BOM e trova il primo oggetto JSON bilanciato nel file corrotto.
+  Uso rapido (sul server):
+  python3 monitoring/grafana/scripts/fix_dashboard_json.py piazzati-dashboard.json
+
+3) Prometheus: risolto problema di scraping (DNS/network)
+- Prometheus riportava il target `piazzati-backend` DOWN per problemi di
+  risoluzione DNS tra reti Docker. Risoluzione temporanea: connettere il
+  container Prometheus alla rete del backend:
+  docker network connect piazzati_piazzati-network piazzati-prometheus-prod
+  Raccomandazione: dichiarare reti esplicite in `docker-compose.prod.yml` per
+  evitare connessioni manuali.
+
+4) Backend: immagine e avvio
+- Pull dall'host del registry privato `rg.fr-par.scw.cloud` falliva per permessi.
+  Soluzione temporanea: build locale e tag con lo stesso nome di registry:
+  docker build -t rg.fr-par.scw.cloud/piazzati/piazzati-backend:latest ./backend
+  docker compose -f docker-compose.prod.yml --env-file .env.prod up -d piazzati-backend
+
+5) `.env.prod` creato/aggiornato
+- È stata preparata una versione di `.env.prod` con le variabili critiche
+  (DATABASE_URL, GRAFANA, PROMETHEUS, SCALEWAY_*). Importante: non includere
+  il file in Git; usarlo come secret in CI/CD.
+
+6) Migrazione Docker su LVM
+- La migrazione dei dati Docker su LV dedicati è stata completata (vedi sezione
+  MIGRAZIONE DOCKER & OLLAMA). Verificare l'integrità dei contenuti e la spazio
+  disponibile prima di pull di grandi immagini (es. modelli Ollama).
+
+7) Persistenza rete Docker in Compose (raccomandazione)
+- Per evitare `docker network connect` manuali, aggiungere al `docker-compose.prod.yml`
+  una sezione `networks:` dichiarando la rete condivisa (es. `piazzati-network`) e
+  assegnare i servizi alle reti:
+  networks:
+    piazzati-network:
+      external: true
+
+8) Apertura porta :8000 e sicurezza
+- Se è necessario esporre l'API direttamente (temporaneo) si può:
+  - Aprire la regola nella Scaleway Security Group per la porta 8000
+  - Abilitare regole ufw/firewall sul server
+  Esempio (Scaleway): aggiornare `piazzati-backend-sg` per consentire TCP/8000
+  dall'intervallo IP privato o dall'IP del load balancer.
+
+9) Tentativo automatizzato di aggiornare la documentazione
+- È stato provato un aggiornamento automatico di questo file `DOCUMENTAZIONE.txt`
+  tramite script/patch; il primo tentativo programmato fallì per mismatch di
+  contesto. Questa sezione è stata aggiunta manualmente come registro delle
+  operazioni. Se preferite un commit Git, posso preparare una patch Git-ready
+  o modificare il file direttamente in repository e creare una branch/PR.
+
+PROSSIMI PASSI RACCOMANDATI:
+- Ripristinare la versione completa del dashboard Grafana (file JSON completo)
+  e confermare che Grafana mostra tutti i pannelli.
+- Aggiungere la rete condivisa a `docker-compose.prod.yml` e ricreare i servizi
+  per rendere la connessione Prometheus → backend persistente.
+- Se si desidera esporre l'API in produzione, preferire l'uso del Load Balancer
+  e del reverse-proxy Nginx piuttosto che mappare direttamente la porta 8000.
+
+COMANDI UTILI RAPIDI (da eseguire sul server):
+```powershell
+# Connetti Prometheus alla rete del backend (temporaneo)
+docker network connect piazzati_piazzati-network piazzati-prometheus-prod
+
+# Build e tag locale dell'immagine backend in caso di problemi con il registry
+cd /opt/piazzati && docker build -t rg.fr-par.scw.cloud/piazzati/piazzati-backend:latest ./backend
+
+# Verifica metrics direttamente dal container di rete
+docker run --rm --network piazzati_piazzati-network curlimages/curl:latest curl -sS http://piazzati-backend:8000/metrics | head -n 20
+
+# Aprire porta 8000 con ufw (esempio, valutare security group prima)
+sudo ufw allow from <YOUR_ALLOWED_IP>/32 to any port 8000 proto tcp
+```
+
+FINE AGGIORNAMENTO 2025-10-27
+
