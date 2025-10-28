@@ -147,7 +147,8 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
 
-          ssh -tt -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP <<EOF
+          # Add SSH keepalive options to avoid broken pipe / 255 on long-running remote tasks
+          ssh -tt -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP <<EOF
             set -e
 
             # Clone repository if missing, otherwise force-sync with origin/main
