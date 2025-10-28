@@ -128,10 +128,35 @@ else
   echo "[setup-server] Skipping model pull per marker"
 fi
 
-# Install Python requirements if file exists in repo
+# Install Python requirements if file exists in repo (use a venv to avoid system-wide installs)
 if [ -f "${REPO_DIR}/backend/requirements.txt" ]; then
-  echo "[setup-server] Installing Python requirements"
-  pip3 install -r "${REPO_DIR}/backend/requirements.txt"
+  echo "[setup-server] Installing Python requirements into a virtualenv"
+
+  # Ensure python3 and venv support exist
+  if ! python3 -c "import venv" >/dev/null 2>&1; then
+    echo "[setup-server] python3-venv missing; installing via apt"
+    apt-get update -qq || true
+    apt-get install -y python3-venv python3-pip || true
+  fi
+
+  VENV_DIR="${REPO_DIR}/.venv"
+  if [ ! -d "${VENV_DIR}" ]; then
+    echo "[setup-server] Creating virtualenv at ${VENV_DIR}"
+    python3 -m venv "${VENV_DIR}"
+  else
+    echo "[setup-server] Reusing existing virtualenv at ${VENV_DIR}"
+  fi
+
+  PIP_BIN="${VENV_DIR}/bin/pip"
+  PY_BIN="${VENV_DIR}/bin/python"
+
+  echo "[setup-server] Upgrading pip in venv"
+  "${PY_BIN}" -m pip install --upgrade pip setuptools wheel || true
+
+  echo "[setup-server] Installing requirements from ${REPO_DIR}/backend/requirements.txt"
+  "${PIP_BIN}" install --no-cache-dir -r "${REPO_DIR}/backend/requirements.txt" || {
+    echo "[setup-server] Warning: pip install exited with non-zero status" >&2
+  }
 else
   echo "[setup-server] No requirements.txt found at ${REPO_DIR}/backend/requirements.txt"
 fi
