@@ -127,6 +127,8 @@ jobs:
         env:
           SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SCALEWAY_REGISTRY_USERNAME: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
+          SCALEWAY_REGISTRY_PASSWORD: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
         run: |
           # Setup SSH key
           mkdir -p ~/.ssh
@@ -140,15 +142,15 @@ jobs:
             cd /opt/piazzati || git clone https://github.com/MeryemeBanani/PiazzaTi.git /opt/piazzati
             cd /opt/piazzati
             git pull origin main
-            
-            # Login to registry and pull latest images
-            echo "${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}" | docker login rg.nl-ams.scw.cloud -u nologin --password-stdin
-            docker compose pull piazzati-backend
-            
+
+            # Login to registry and pull latest images (use provided username/password)
+            echo "${SCALEWAY_REGISTRY_PASSWORD}" | docker login rg.nl-ams.scw.cloud -u "${SCALEWAY_REGISTRY_USERNAME}" --password-stdin
+            docker compose pull piazzati-backend || true
+
             # Deploy with production config
             cp backend/.env.scaleway backend/.env
             docker compose up -d --build
-            
+
             # Health check
             sleep 30
             curl -f http://localhost:8000/health || exit 1
