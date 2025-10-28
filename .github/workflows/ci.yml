@@ -188,9 +188,22 @@ jobs:
             # Deploy updated containers
             docker compose up -d --build
 
-            # Health check
-            sleep 30
-            curl -f http://localhost:8000/health || exit 1
+            # Health check: poll with timeouts and fail-fast with logs if unreachable
+            echo "[deploy] Performing health check on http://localhost:8000/health"
+            max_wait=120
+            interval=5
+            waited=0
+            until curl -sS --fail --max-time 10 http://localhost:8000/health >/dev/null; do
+              if [ "$waited" -ge "$max_wait" ]; then
+                echo "[deploy] Health check failed after ${max_wait}s — dumping backend logs for debugging"
+                docker compose logs --no-color piazzati-backend --tail 200 || true
+                exit 1
+              fi
+              echo "[deploy] Health check not ready yet; sleeping ${interval}s (waited ${waited}s)"
+              sleep $interval
+              waited=$((waited + interval))
+            done
+            echo "[deploy] Health check passed"
           EOF
 
   security-scan:
