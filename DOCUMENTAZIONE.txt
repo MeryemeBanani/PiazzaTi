@@ -1,3 +1,4 @@
+
 DOCUMENTAZIONE - Resoconto operativo (aggiornamento 2025-10-26)
 
 Questo file è stato aggiornato per registrare le operazioni eseguite per rendere il backend "PiazzaTi" stabile e riproducibile su server di produzione (venv + systemd + DB via Docker). Le note seguenti descrivono i passaggi effettuati, i file toccati, i comandi chiave e i prossimi step suggeriti.
@@ -3219,3 +3220,144 @@ async def startup_event():
 - Conservare la copia off-host dei backup prima di eseguire operazioni distruttive.
 
 ===============================================================================
+
+AGGIORNAMENTO: CI/CD, REGISTRY E DEPLOY REMOTO (2025-10-28)
+===================================================================
+
+Questa sezione riepiloga le modifiche e le operazioni eseguite per abilitare
+il deploy automatico (build → push → deploy remoto) e le operazioni di
+manutenzione disk/docker effettuate sul server di produzione.
+
+1) Cambiamenti principali nel repository
+- `.github/workflows/ci.yml`:
+  - Aggiunta fase di login e push su Scaleway Container Registry
+    (registry: `rg.nl-ams.scw.cloud`, namespace: `piazzati`).
+  - Metadata/tagging automatico delle immagini (sha/branch/latest).
+  - Pass-through dei segreti necessari alla fase di deploy remota.
+  - Permessi workflow adeguati per upload SARIF e sicurezza.
+
+- Piccole correzioni a file/scripts che influenzano il deploy:
+  - `backend/app/ollama_integration.py` — fix lint/flake8.
+  - `scripts/setup-server.sh` — ora usa il `.venv` locale del repo.
+  - `scripts/pull_ollama_model.sh` — retry e fallback TMPDIR per pull robusti.
+  - `app/static/.gitkeep` — aggiunto per evitare errori nei test locali.
+  - `monitoring/grafana/dashboards/piazzati-dashboard.json` — dashboard corrotta sostituita.
+
+2) Registry, immagini e nomi usati
+- Registry principale usato per push: rg.nl-ams.scw.cloud
+- Image path selezionata per il backend (pipeline e deploy):
+  `rg.nl-ams.scw.cloud/piazzati/backend/piazzati-backend:<tag>`
+  (la pipeline produce tag immutabili + `latest` per `main`).
+
+3) GitHub Secrets rilevanti (nomi usati nella pipeline)
+- SCALEWAY_REGISTRY_USERNAME  (es. `nologin` o AccessKeyID a seconda della modalità)
+- SCALEWAY_REGISTRY_PASSWORD  (registry token / password per docker login)
+- SCALEWAY_ACCESS_KEY         (Scaleway access key)
+- SCALEWAY_SECRET_KEY         (Scaleway secret key)
+- SCALEWAY_PROJECT_ID         (project id per scw CLI)
+- SCALEWAY_DATABASE_URL      (opzionale, iniettato in deploy remote)
+- SSH_PRIVATE_KEY            (usata nel job di deploy remoto se necessario)
+- SCALEWAY_INSTANCE_IP       (IP dell'istanza target, usato nel deploy remoto)
+
+4) Come funziona il deploy automatico (sintesi)
+- Push su `main` → GitHub Actions:
+  1. job `test` (lint, pytest con pgvector)
+  2. job `build-and-deploy` (build immagine, docker login, push a `rg.nl-ams.scw.cloud`)
+  3. se configurato, step di deploy remoto che esegue via SSH sul server:
+     - `docker login rg.nl-ams.scw.cloud -u ${{ secrets.SCALEWAY_REGISTRY_USERNAME }} -p ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}`
+     - `docker compose pull` (o `docker pull <image>:<tag>`)
+     - `docker compose up -d --build` oppure update mirato servizio backend
+
+5) Comandi pratici per deploy manuale / rollback sul server
+- Pull immagine specifica e update servizio (minimo downtime):
+```bash
+# scarica i nuovi tag
+docker compose pull piazzati-backend
+
+# aggiorna solo il servizio backend (no deps)
+docker compose up -d --no-deps --build piazzati-backend
+```
+
+- Deploy completo (aggiorna tutti i servizi definiti nel compose):
+```bash
+docker compose pull
+docker compose up -d --build
+```
+
+- Rollback a tag precedente (es. `main-abc1234`):
+```bash
+docker pull rg.nl-ams.scw.cloud/piazzati/backend/piazzati-backend:main-abc1234
+docker compose up -d --no-deps --build piazzati-backend
+```
+
+6) Azioni eseguite sul server (pulizia Docker e risultati)
+- Pruning eseguito:
+  - `docker image prune -f` — ha rimosso immagini dangling (<none>)
+  - `docker builder prune -af` — ha liberato ~2.324GB (builder cache)
+  - Rimozione immagine duplicata `rg.fr-par.scw.cloud/piazzati/piazzati-backend:latest`
+    (ID `8cb5f06eb11b`) tramite `docker image rm 8cb5f06eb11b`, rilasciando i layer
+    corrispondenti (~978MB segnalati prima della rimozione).
+
+- Stato Docker post-cleanup (esempio rilevazione):
+  - `docker system df` → Images total ~2.096GB
+  - `docker images` mostra `piazzati-piazzati-backend:latest` (immagine corrente in uso)
+  - `du -sh /var/lib/docker/overlay2` → ~4.3G
+
+- Safety notes:
+  - NON usare `docker image prune -a` in produzione senza scheduled downtime
+  - NON forzare la rimozione (`docker image rm -f`) di immagini usate da container
+
+7) Stato LVM e spazio disco rilevato (server remoto)
+- LVM configurato: Volume Group `piazza_vg` con due LV principali:
+  - `lv_docker` = 30G → montato su `/var/lib/docker` (Usato ~2.4G, Libero ~27G)
+  - `lv_ollama`  = 16G → montato su `/usr/local/lib/ollama` (Usato ~4.6G, Libero ~12G)
+- Spazio VG residuo: ~572M (quando presente) — attenzione: per aumentare LVs
+  servirebbe aggiungere un nuovo disco al VG o ridurre dati.
+
+8) Verifiche e comandi diagnostici raccomandati
+- Stato immagini/containers:
+```bash
+docker images --no-trunc --format '{{.Repository}}:{{.Tag}}\\t{{.ID}}\\t{{.Size}}'
+docker ps -a --format '{{.ID}}\\t{{.Image}}\\t{{.Names}}\\t{{.Status}}'
+```
+- Controllo spazio Docker e overlay2:
+```bash
+docker system df
+df -hT /var/lib/docker
+du -sh /var/lib/docker/overlay2
+```
+- Controllo LVM:
+```bash
+lsblk -f
+lvs -a -o +devices
+vgs
+df -hT
+```
+
+9) Contratto operativo (inputs/outputs / criteri di successo)
+- Input: commit su `main` o tag immagine pubblicato nel registry.
+- Output atteso: immagine pubblicata su `rg.nl-ams.scw.cloud/piazzati/...` e servizio
+  backend aggiornato sul server remoto, endpoint /health OK.
+- Error modes: build failure (build logs), docker login fail (credenziali/secret),
+  insufficient disk space (docker pull fallito), container crash (logs service).
+
+10) Rollout checklist rapida prima del deploy in produzione
+- Verificare GitHub Actions green per job `test` e `build-and-deploy`.
+- Assicurarsi che `SCALEWAY_REGISTRY_USERNAME`/`SCALEWAY_REGISTRY_PASSWORD` siano
+  settati correttamente nei GitHub Secrets.
+- Verificare spazio su `/var/lib/docker` e `/usr/local/lib/ollama`.
+- Fare snapshot/backup (se opportuno) dei volumi Docker prima di grandi aggiornamenti.
+
+11) Raccomandazioni e next steps
+- Ruotare le API keys/secret del registry dopo deploy (best practice) e aggiornare
+  i GitHub Secrets.
+- Aggiungere un job di smoke-test post-deploy che chiami `/health` e fallisca il
+  workflow in caso di errore per rollback automatico.
+- Documentare la policy di backup/retention per le immagini e i volumi Docker.
+
+---
+Se vuoi, posso:
+ - aggiungere questa sezione anche come file separato `docs/ci-deploy-2025-10-28.md`;
+ - o creare dei piccoli script di helper `deploy/update-backend.sh` che eseguano
+   pull + up -d --no-deps --build in modo idempotente sul server.
+

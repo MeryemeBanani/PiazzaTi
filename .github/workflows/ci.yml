@@ -1,5 +1,13 @@
 name: PiazzaTi CI/CD
 
+# Give the workflow the minimum permissions needed to upload code-scanning SARIF
+# and to read repository contents. This is required for the CodeQL upload step
+# to call GitHub's code scanning API (otherwise you'll see "Resource not
+# accessible by integration" when running on non-fork runs).
+permissions:
+  contents: read
+  security-events: write
+
 on:
   push:
     branches: [ main, dev, feature/* ]
@@ -161,7 +169,10 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     # Run on pull requests and also when pushing to main (so production pushes get scanned)
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    # Only run for pull requests originating from this repository (not forks)
+    # or when pushing to main. Forked PRs can't use the repo's GITHUB_TOKEN
+    # with security-events permission so uploading SARIF will fail there.
+    if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     
     steps:
       - name: Checkout code
