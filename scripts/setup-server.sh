@@ -147,6 +147,13 @@ if [ -f "${REPO_DIR}/backend/requirements.txt" ]; then
     echo "[setup-server] Reusing existing virtualenv at ${VENV_DIR}"
   fi
 
+  # If the venv is present but seems broken (missing python binary), recreate it
+  if [ ! -x "${VENV_DIR}/bin/python" ]; then
+    echo "[setup-server] Existing virtualenv is broken or incomplete; recreating ${VENV_DIR}"
+    rm -rf "${VENV_DIR}" || true
+    python3 -m venv "${VENV_DIR}"
+  fi
+
   PIP_BIN="${VENV_DIR}/bin/pip"
   PY_BIN="${VENV_DIR}/bin/python"
 
