@@ -9,6 +9,8 @@ import time
 import requests
 import re
 import sys
+import argparse
+import os
 from datetime import datetime
 from typing import Optional, Tuple
 
@@ -89,6 +91,34 @@ class PeriodicProgressTracker:
         if message:
             self.status_message = message
         self._display_progress()
+
+
+# Small helper to tee stdout/stderr to a logfile when requested
+class _Tee:
+    def __init__(self, original, logfile):
+        self.original = original
+        self.logfile = logfile
+
+    def write(self, data):
+        try:
+            self.original.write(data)
+        except Exception:
+            pass
+        try:
+            self.logfile.write(data)
+            self.logfile.flush()
+        except Exception:
+            pass
+
+    def flush(self):
+        try:
+            self.original.flush()
+        except Exception:
+            pass
+        try:
+            self.logfile.flush()
+        except Exception:
+            pass
 
 # ============================================================================
 # FUNZIONI DI VERIFICA (VERSIONI COMPATTE)
@@ -395,6 +425,15 @@ def setup_ollama_complete():
         print("\n🎉 Modello già disponibile - procedendo al test...")
     else:
         # Step 5: Download
+        # Note: this function may be called with flags to avoid downloading
+        # (see CLI flags implemented in the __main__ section)
+        print(f"\n⚡ Modello non presente: {MODEL_NAME}")
+        # If caller requested checks only or no-pull, abort here
+        if getattr(setup_ollama_complete, "_no_pull", False) or getattr(setup_ollama_complete, "_check_only", False):
+            print("\n⚠️  Skip download per flag (--no-pull / --check-only).")
+            print("   └─ Esegui manualmente su server o usa lo script shell di provisioning.")
+            return False
+
         print(f"\n⚡ Inizio download {MODEL_NAME}...")
         if not download_model_with_periodic_updates(MODEL_NAME):
             print("\n❌ ERRORE: Download fallito")
@@ -424,6 +463,37 @@ def setup_ollama_complete():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Setup Ollama con monitoring periodico")
+    parser.add_argument("--check-only", action="store_true", help="Esegui solo i controlli (non scaricare)")
+    parser.add_argument("--no-pull", action="store_true", help="Non effettuare il pull del modello (alias di --check-only)")
+    parser.add_argument("--log-file", type=str, default=None, help="Percorso file di log per duplicare stdout/stderr")
+    parser.add_argument("--timeout", type=int, default=None, help="Timeout massimo per il download in secondi (override)")
+    args = parser.parse_args()
+
+    # If requested, tee stdout/stderr to logfile
+    if args.log_file:
+        try:
+            os.makedirs(os.path.dirname(args.log_file), exist_ok=True)
+        except Exception:
+            pass
+        try:
+            logfile = open(args.log_file, "a", encoding="utf-8")
+            sys.stdout = _Tee(sys.stdout, logfile)
+            sys.stderr = _Tee(sys.stderr, logfile)
+        except Exception as e:
+            print(f"⚠️ Impossibile aprire log file {args.log_file}: {e}")
+
+    # Allow overriding timeout
+    if args.timeout:
+        try:
+            MAX_DOWNLOAD_TIME = int(args.timeout)
+        except Exception:
+            pass
+
+    # Attach simple flags to the function so internal code can read them without changing many signatures
+    setattr(setup_ollama_complete, "_no_pull", args.no_pull)
+    setattr(setup_ollama_complete, "_check_only", args.check_only)
+
     print("🚀 Avvio setup Ollama...")
     print("⏱️  Gli aggiornamenti appariranno ogni 20 secondi durante il download\n")
 
