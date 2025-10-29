@@ -113,6 +113,11 @@ jobs:
           username: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
           password: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
 
+      - name: Set image tag and full name
+        run: |
+          echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_ENV
+          echo "IMAGE_FULL=${REGISTRY}/${BACKEND_IMAGE}:${GITHUB_SHA}" >> $GITHUB_ENV
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -124,12 +129,14 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push backend image
+      - name: Build and push backend image (tagged with SHA)
         uses: docker/build-push-action@v5
         with:
           context: ./backend
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ env.IMAGE_FULL }}
+            ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -141,6 +148,7 @@ jobs:
           SCALEWAY_REGISTRY_USERNAME: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
           SCALEWAY_REGISTRY_PASSWORD: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
           OLLAMA_MODEL_NAME: ${{ secrets.OLLAMA_MODEL_NAME }}
+          IMAGE_FULL: ${{ env.IMAGE_FULL }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
@@ -148,17 +156,15 @@ jobs:
           ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
 
           # Add SSH keepalive options to avoid broken pipe / 255 on long-running remote tasks
-          ssh -tt -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP <<EOF
-            # Enable strict failure handling and verbose trace for remote deploy steps
+          # Export IMAGE_FULL into the remote environment, then run the heredoc script under bash
+          ssh -tt -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP "export IMAGE_FULL='${IMAGE_FULL}' ; bash -s" <<'EOF'
             set -euxo pipefail
 
-            # Clone repository if missing, otherwise force-sync with origin/main
             if [ ! -d /opt/piazzati ]; then
               git clone https://github.com/MeryemeBanani/PiazzaTi.git /opt/piazzati
             fi
             cd /opt/piazzati
 
-            # Try a small, safe cleanup to free disk: remove dangling docker objects and apt cache
             echo "[deploy] attempting safe disk cleanup (docker prune & apt clean)"
             docker system prune -af || true
             rm -rf /var/cache/apt/archives/* || true
@@ -167,7 +173,6 @@ jobs:
             git reset --hard origin/main
             git clean -fd || true
 
-            # Ensure setup script is executable and run it (idempotent)
             if [ -f ./scripts/setup-server.sh ]; then
               echo "[deploy] Preparing scripts/setup-server.sh"
               chmod +x ./scripts/setup-server.sh || true
@@ -180,35 +185,53 @@ jobs:
             # Login to container registry (secrets expanded by runner)
             echo "$SCALEWAY_REGISTRY_PASSWORD" | docker login rg.nl-ams.scw.cloud -u "$SCALEWAY_REGISTRY_USERNAME" --password-stdin
 
-            # Pull latest backend image
-            docker compose pull piazzati-backend || true
+            # Create a small compose override that pins the image to the exact tag we built in CI
+            cat > docker-compose.deploy.yml <<YML
+services:
+  piazzati-backend:
+    image: ${IMAGE_FULL}
+YML
+
+            # Pull with retry/backoff to mitigate transient network/registry errors
+            attempts=0
+            until docker compose -f docker-compose.yml -f docker-compose.deploy.yml pull piazzati-backend; do
+              attempts=$((attempts+1))
+              if [ "$attempts" -ge 3 ]; then
+                echo "[deploy] docker pull failed after $attempts attempts"
+                docker compose logs --no-color piazzati-backend --tail 500 || true
+                exit 1
+              fi
+              sleep $((attempts * 5))
+            done
+
+            # Deploy updated containers without rebuilding on the server
+            docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d
 
             # Apply production environment config
             cp backend/.env.scaleway backend/.env || true
-
-            # Deploy updated containers
-            docker compose up -d --build
 
             # Health check: poll with timeouts and fail-fast with logs if unreachable
             echo "[deploy] Performing health check on http://localhost:8000/health"
             max_wait=120
             interval=5
             waited=0
-            # Note: this heredoc is unquoted so the runner expands secrets; escape local variables
             until curl -sS --fail --max-time 10 http://localhost:8000/health >/dev/null; do
-              if [ "\$waited" -ge "\$max_wait" ]; then
-                echo "[deploy] Health check failed after \$max_wait s — dumping backend logs for debugging"
-                # Print the last 200 log lines (non-follow) so the remote script doesn't block
-                docker compose logs --no-color piazzati-backend --tail 200 || true
+              if [ "$waited" -ge "$max_wait" ]; then
+                echo "[deploy] Health check failed after $max_wait s — dumping backend logs for debugging"
+                docker compose logs --no-color piazzati-backend --tail 500 || true
                 exit 1
               fi
-              echo "[deploy] Health check not ready yet; sleeping \$interval s (waited \$waited s)"
-              sleep \$interval
-              waited=\$((\$waited + \$interval))
+              echo "[deploy] Health check not ready yet; sleeping $interval s (waited $waited s)"
+              sleep $interval
+              waited=$((waited + interval))
             done
             echo "[deploy] Health check passed"
 
-            # Final marker to clearly indicate remote script completion and force exit
+            # Record deployed tag for quick rollback
+            mkdir -p /var/lib/piazzati
+            # store only the tag portion after the final ':'
+            echo "${IMAGE_FULL##*:}" > /var/lib/piazzati/last_deployed_tag || true
+
             echo "[deploy] REMOTE SCRIPT FINISHED"
             exit 0
           EOF

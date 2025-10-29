@@ -1995,9 +1995,65 @@ NOTIFICATION:
 • Security Issues: 🔒 Security alert su GitHub Security tab
 
 ROLLBACK STRATEGY:
-• Automatic: Scaleway mantiene versione precedente se deployment fail
-• Manual: Redeploy previous commit o revert Git commit
-• Emergency: Scaleway CLI manual deployment di tag specifico
+• Automatic: Scaleway mantiene la versione precedente se il deployment fallisce
+• Manual: Redeploy della commit precedente o revert del commit su Git
+• Emergency: Scaleway CLI—deploy manuale di un'immagine taggata specifica
+
+AGGIORNAMENTO 2025-10-29 — Deploy immutabile e strumenti di rollback
+-----------------------------------------------------------------
+Contesto breve
+• Abbiamo introdotto una strategia di deploy immutabile: il job CI costruisce e tagga l'immagine con il commit SHA (es. `rg.nl-ams.scw.cloud/piazzati/piazzati-backend:<sha>`). Il runner push-a l'immagine e il server di produzione ora esegue solo `docker pull <image:sha>` + `docker compose up -d` (NESSUN `--build` remoto).
+
+Perché: riduce i tempi di deploy, evita build lente e fragili sul server, e rende il rollback deterministico.
+
+Come funziona (sintesi operativa):
+- CI: genera `IMAGE_TAG=${GITHUB_SHA}` e `IMAGE_FULL=rg.nl-ams.scw.cloud/piazzati/piazzati-backend:${IMAGE_TAG}`, builda e push-a `IMAGE_FULL`.
+- Remote deploy: lo script remoto (ereditato dal workflow) crea un file override `docker-compose.deploy.yml` con `image: ${IMAGE_FULL}` per il servizio `piazzati-backend`, esegue `docker compose pull` (con retry/backoff) e poi `docker compose up -d` senza build.
+- Persistenza stato: lo script scrive il tag deployato in `/var/lib/piazzati/last_deployed_tag` e registra l'evento in `/var/lib/piazzati/deploy_history.log`.
+
+Script di rollback (manuale)
+• File: `scripts/remote_rollback.sh` (nella repository)
+• Scopo: rendere semplice il rollback a un tag immutabile già presente nel registry.
+
+Esempio d'uso (dalla tua workstation con accesso SSH al server):
+```powershell
+# Esempio: rollback alla tag abc1234
+ssh -i ~/.ssh/id_rsa user@your-server "sudo /opt/piazzati/scripts/remote_rollback.sh abc1234"
+```
+
+Comportamento dello script:
+- accetta un argomento: il tag immutabile (es. `abc1234`)
+- genera `docker-compose.rollback.yml` che punta a `rg.nl-ams.scw.cloud/piazzati/piazzati-backend:<tag>`
+- esegue `docker compose pull` con retry/backoff
+- esegue `docker compose up -d` per applicare il rollback
+- monitora `/health` fino al timeout configurato e registra l'operazione in `/var/lib/piazzati/deploy_history.log`
+- scrive il tag corrente in `/var/lib/piazzati/last_deployed_tag`
+
+Note operative e best-practice:
+- Assicurati che il server abbia accesso autenticato al registry (docker login) e che le credenziali non siano scadute.
+- Verifica la lista tag nel registry prima del rollback: il rollback può essere fatto solo su tag già push-ati.
+- Se il server non ha il tag locale, `docker compose pull` lo recupererà dal registry.
+- In emergenza, puoi eseguire il rollback manuale con Scaleway CLI o tramite console del provider, ma preferiamo lo script per coerenza e logging.
+
+CI smoke-test consigliato
+• Raccomandazione: aggiungere un breve smoke-test in CI che avvia l'immagine costruita in un container temporaneo e verifica l'endpoint `/health` prima di eseguire il push finale. Questo riduce la probabilità di pushare immagini non avviabili.
+
+Documentazione correlata nel repository:
+- `scripts/remote_rollback.sh` — script di rollback e istruzioni di run
+- `docs/ROLLBACK.md` — guida utente con esempi e scenari di rollback
+- `.github/workflows/ci.yml` — contiene i dettagli dell'IMAGE_TAG/IMAGE_FULL e del deploy remoto
+
+Changelog rapido (2025-10-29):
+- Implementato deploy immutabile (tag SHA) nel workflow CI
+- Aggiunto script `scripts/remote_rollback.sh` e `docs/ROLLBACK.md`
+- Hardening dello script remoto: keepalive SSH, escape heredoc, rimozione di `logs -f` bloccanti, marker finale di completamento
+
+Esempio rapido: verificare ultimo tag deployato sul server
+```bash
+sudo cat /var/lib/piazzati/last_deployed_tag
+# oppure
+sudo tail -n 50 /var/lib/piazzati/deploy_history.log
+```
 
 ═══════════════════════════════════════════════════════════════════════════════
 6b. CONFIGURAZIONE VARIABILI AMBIENTE PRODUZIONE (.env.prod)
