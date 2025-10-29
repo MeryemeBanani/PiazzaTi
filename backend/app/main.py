@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import get_db
+from app.api.parse import router as parse_router
 import os
 from opentelemetry import trace, metrics
 from opentelemetry.sdk.trace import TracerProvider
@@ -39,6 +40,9 @@ tracer = trace.get_tracer(__name__)
 
 app = FastAPI(title="PiazzaTi Backend", version="1.0.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# Register parsing API router (PDF -> parsed JSON)
+app.include_router(parse_router)
 
 # Instrument FastAPI automatically (per tracciare le richieste)
 FastAPIInstrumentor.instrument_app(app)
