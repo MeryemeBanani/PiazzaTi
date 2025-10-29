@@ -345,7 +345,9 @@ def verify_model_ready(model_name: str) -> bool:
             text = result.get("response", "").strip()
             print(" OK")
             print(f"✅ Modello funzionante!")
-            print(f"   Risposta: '{text[:50]{"..." if len(text) > 50 else ""}}'")
+            # Mostra i primi 50 caratteri e aggiunge '...' se la risposta è più lunga
+            preview = text[:50] + ("..." if len(text) > 50 else "")
+            print(f"   Risposta: '{preview}'")
             return True
         else:
             print(f" ERRORE ({response.status_code})")
