@@ -135,7 +135,7 @@ jobs:
           context: ./backend
           push: true
           tags: |
-            ${{ env.IMAGE_FULL }}
+            ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
             ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -153,6 +153,12 @@ jobs:
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+
+          # Recompute IMAGE_FULL here to ensure it's present in this shell
+          # (some runners may not immediately expose variables written to $GITHUB_ENV)
+          IMAGE_FULL="${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${GITHUB_SHA}"
+          export IMAGE_FULL
+          echo "[deploy-step] IMAGE_FULL=$IMAGE_FULL"
 
           # Add SSH keepalive options to avoid broken pipe / 255 on long-running remote tasks
           # Export IMAGE_FULL into the remote environment, then run the heredoc script under bash
