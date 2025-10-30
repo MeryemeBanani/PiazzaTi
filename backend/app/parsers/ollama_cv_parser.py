@@ -588,16 +588,36 @@ RULES:
 
 SCHEMA:
 {
-    "personal_info": {"full_name": "Name",
-    "email": "email", "phone": "phone", "address": "Via X", "city": "City", "country": "Country"},
+    "personal_info": {
+        "full_name": "Name",
+        "email": "email",
+        "phone": "phone",
+        "address": "Via X",
+        "city": "City",
+        "country": "Country",
+    },
     "summary": "Professional summary",
-    "experience": [{"title": "Job", "company": "Company",
-    "city": "City", "start_date": "YYYY", "end_date": "YYYY", "responsibilities": ["r1"]}],
-    "education": [{"degree": "Degree", "institution": "Institution",
-    "graduation_year": 2020, "gpa": "110/110"}],
+    "experience": [
+        {
+            "title": "Job",
+            "company": "Company",
+            "city": "City",
+            "start_date": "YYYY",
+            "end_date": "YYYY",
+            "responsibilities": ["r1"],
+        }
+    ],
+    "education": [
+        {
+            "degree": "Degree",
+            "institution": "Institution",
+            "graduation_year": 2020,
+            "gpa": "110/110",
+        }
+    ],
     "skills": [{"name": "Python"}],
     "languages": [{"name": "Italiano", "proficiency": "Madrelingua"}],
-    "certifications": [{"name": "Cert", "date_obtained": "2023"}]
+    "certifications": [{"name": "Cert", "date_obtained": "2023"}],
 }
 
 CV:
@@ -771,21 +791,22 @@ JSON:"""
         improved_count = 0
         skipped_count = 0
         max_process = 10  # Performance limit
+        total_to_process = min(max_process, len(data.experience))
 
         for i, exp in enumerate(data.experience[:max_process]):
             # Check if needs enrichment
             if exp.description:
                 if self._is_high_quality_description(exp.description):
-                    header = f"[{i+1}/{min(max_process, len(data.experience))}] {exp.title[:30]}"
+                    header = f"[{i+1}/{total_to_process}] {exp.title[:30]}"
                     print(f"{header}: Skip (high quality)")
                     skipped_count += 1
                     continue
                 else:
-                    header = f"[{i+1}/{min(max_process, len(data.experience))}] {exp.title[:30]}"
+                    header = f"[{i+1}/{total_to_process}] {exp.title[:30]}"
                     print(f"        {header}: Improving...")
                     action = "improve"
             else:
-                header = f"[{i+1}/{min(max_process, len(data.experience))}] {exp.title[:30]}"
+                header = f"[{i+1}/{total_to_process}] {exp.title[:30]}"
                 print(f"        {header}: Generating...")
                 action = "generate"
 
@@ -1006,7 +1027,8 @@ COMPANY: {exp.company or 'N/A'}
 KEY RESPONSIBILITIES:
 {resp_text}
 
-Write a concise summary of the role. Single paragraph, 150-300 chars. No prefix.
+Write a concise summary of the role.
+Single paragraph, 150-300 chars. No prefix.
 
 DESCRIPTION:"""
 
@@ -1033,7 +1055,8 @@ DESCRIPTION:"""
 JOB TITLE: {exp.title}
 COMPANY: {exp.company or 'Company'}
 
-Write a one-sentence summary of typical responsibilities for this role. 100-200 chars. No prefix.
+Write a one-sentence summary of typical responsibilities for this role.
+100-200 chars. No prefix.
 
 DESCRIPTION:"""
 
@@ -1683,11 +1706,11 @@ DESCRIPTION:"""
             return
 
         lines = [line.strip() for line in summary_section.split("\n") if line.strip()]
-        content_lines = [
-            line
-            for line in lines
-            if not any(h in line.lower() for h in ["profilo", "professional", "summary"])
-        ]
+        content_lines = []
+        for line in lines:
+            lower_line = line.lower()
+            if not any(h in lower_line for h in ["profilo", "professional", "summary"]):
+                content_lines.append(line)
 
         if content_lines:
             summary = " ".join(content_lines[:3])
@@ -1816,9 +1839,9 @@ def display_parsing_results(result: ParsedDocument, verbose: bool = True):
     if result.personal_info.phone:
         print(f"  Phone: {result.personal_info.phone}")
     if result.personal_info.city:
-        print(
-            f"  Location: {result.personal_info.city}, {result.personal_info.country or ''}"
-        )
+        loc = f"  Location: {result.personal_info.city}, "
+        loc += f"{result.personal_info.country or ''}"
+        print(loc)
     if result.personal_info.linkedin:
         print(f"  LinkedIn: {result.personal_info.linkedin}")
     if result.personal_info.github:
@@ -1961,7 +1984,8 @@ def compute_extraction_stats(result: ParsedDocument) -> dict:
     }
 
     # Population rate (% of non-empty sections)
-    total_sections = 8  # experience, education, skills, languages, certs, summary, preferences, personal_info
+    # number of top-level sections considered for population rate
+    total_sections = 8
     populated_sections = 0
 
     if len(result.experience) > 0:
