@@ -176,8 +176,19 @@ jobs:
             if [ -f ./scripts/setup-server.sh ]; then
               echo "[deploy] Preparing scripts/setup-server.sh"
               chmod +x ./scripts/setup-server.sh || true
-              echo "[deploy] Running scripts/setup-server.sh (this is idempotent)"
-              MODEL_NAME="${OLLAMA_MODEL_NAME:-llama3.1:8b}" REPO_DIR="/opt/piazzati" bash ./scripts/setup-server.sh || echo "[deploy] setup-server.sh exited with non-zero status"
+              echo "[deploy] Starting scripts/setup-server.sh in background (non-blocking)"
+              # Start provisioning in background and log to /var/log/setup-server.log
+              MODEL_NAME="${OLLAMA_MODEL_NAME:-llama3.1:8b}" REPO_DIR="/opt/piazzati" nohup bash ./scripts/setup-server.sh > /var/log/setup-server.log 2>&1 & echo "[deploy] setup-server.sh started (PID $!)"
+              # Give the script a moment to produce logs, then show a short head to Actions log
+              sleep 1
+              echo "[deploy] tail /var/log/setup-server.log (first 30 lines):"
+              head -n 30 /var/log/setup-server.log || true
+              # Quick non-blocking probe to Ollama API (1s timeout) to give immediate feedback
+              if curl -sS --max-time 1 http://localhost:11434/api/tags >/dev/null 2>&1; then
+                echo "[deploy] Ollama API reachable — models may be present"
+              else
+                echo "[deploy] Ollama not ready yet; background provisioning continues. Check /var/log/setup-server.log on server."
+              fi
             else
               echo "[deploy] No scripts/setup-server.sh found — skipping server bootstrap"
             fi
@@ -210,8 +221,9 @@ jobs:
 
             # Health check: poll with timeouts and fail-fast with logs if unreachable
             echo "[deploy] Performing health check on http://localhost:8000/health"
-            max_wait=120
-            interval=5
+            # shortened timeouts to make CI feedback faster (provisioning continues in background)
+            max_wait=60
+            interval=3
             waited=0
             until curl -sS --fail --max-time 10 http://localhost:8000/health >/dev/null; do
               if [ "$waited" -ge "$max_wait" ]; then
