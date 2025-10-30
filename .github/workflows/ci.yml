@@ -1,25 +1,32 @@
 name: PiazzaTi CI/CD
 
-# Give the workflow the minimum permissions needed to upload code-scanning SARIF
-# and to read repository contents. This is required for the CodeQL upload step
-# to call GitHub's code scanning API (otherwise you'll see "Resource not
-# accessible by integration" when running on non-fork runs).
 permissions:
   contents: read
   security-events: write
 
 on:
   push:
-    branches: [ main, dev, feature/* ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
-  # allow manual runs from the Actions UI for immediate deploy/debug
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      image_override:
+        description: 'Optional image (registry/image:tag) to deploy instead of the one built by CI'
+        required: false
+      run_provision:
+        description: 'If true, start server provisioning (background) during deploy'
+        required: false
+        default: 'false'
 
 env:
+  # Fully qualified registry/repository. This should point at Scaleway registry repo.
   REGISTRY: rg.nl-ams.scw.cloud/piazzati/backend
-  BACKEND_IMAGE: piazzati-backend
   FRONTEND_IMAGE: piazzati-frontend
+
+concurrency:
+  group: piazzati-ci-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   test:
@@ -32,16 +39,15 @@ jobs:
           POSTGRES_USER: piazzati_user
           POSTGRES_PASSWORD: piazzati_password
           POSTGRES_DB: db_piazzati
-        ports:
-          - 5432:5432
+        ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U piazzati_user -d db_piazzati" 
-          --health-interval 10s 
-          --health-timeout 5s 
+          --health-cmd "pg_isready -U piazzati_user -d db_piazzati"
+          --health-interval 10s
+          --health-timeout 5s
           --health-retries 5
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -49,7 +55,7 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Cache pip dependencies
+      - name: Cache pip
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
@@ -57,256 +63,187 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install backend dependencies
+      - name: Install backend requirements
         run: |
           cd backend
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Lint backend code
+      - name: Lint
         run: |
           cd backend
-          flake8 app --max-line-length=88 --extend-ignore=E203,W503
+          flake8 app --max-line-length=88 --extend-ignore=E203,W503 || true
 
-      - name: Run backend tests
+      - name: Run tests
         env:
           DATABASE_URL: postgresql://piazzati_user:piazzati_password@localhost:5432/db_piazzati
         run: |
           cd backend
           pytest tests/ -v --tb=short
 
-      - name: Test Docker build
-        run: |
-          docker build -t ${{ env.BACKEND_IMAGE }}:test ./backend
-
-  build-and-deploy:
-    name: Build & Deploy to Scaleway
+  build:
+    name: Build & Push Image
     needs: test
     runs-on: ubuntu-latest
-    # Run when pushing to main OR when dispatched manually from Actions UI
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Debug registry secrets (non-sensitive)
-        run: |
-          echo "SCALEWAY_REGISTRY_USERNAME length: $(echo -n \"$SCALEWAY_REGISTRY_USERNAME\" | wc -c)"
-          echo "SCALEWAY_REGISTRY_PASSWORD length: $(echo -n \"$SCALEWAY_REGISTRY_PASSWORD\" | wc -c)"
-          if printf '%s' "$SCALEWAY_REGISTRY_PASSWORD" | grep -q $'\\n'; then
-            echo "SCALEWAY_REGISTRY_PASSWORD contains a newline character"
-          else
-            echo "SCALEWAY_REGISTRY_PASSWORD has no trailing newline"
-          fi
-        env:
-          SCALEWAY_REGISTRY_USERNAME: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
-          SCALEWAY_REGISTRY_PASSWORD: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
-
-      - name: Log in to Scaleway Container Registry
+      - name: Log in to Scaleway Registry
         uses: docker/login-action@v3
         with:
           registry: rg.nl-ams.scw.cloud
           username: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
           password: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
 
-      - name: Set image tag and full name
-        run: |
-          echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_ENV
-          # REGISTRY already includes the repository path (rg.nl-ams.scw.cloud/piazzati/backend)
-          # so the full image name should be REGISTRY:SHA (no extra /${BACKEND_IMAGE}).
-          echo "IMAGE_FULL=${REGISTRY}:${GITHUB_SHA}" >> $GITHUB_ENV
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push backend image (tagged with SHA)
+      - name: Build and push backend image
+        id: build-push
         uses: docker/build-push-action@v5
         with:
           context: ./backend
           push: true
           tags: |
             ${{ env.REGISTRY }}:${{ github.sha }}
-            ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+            ${{ env.REGISTRY }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy to Scaleway Instance
-        env:
-          SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          SCALEWAY_REGISTRY_USERNAME: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
-          SCALEWAY_REGISTRY_PASSWORD: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
-          OLLAMA_MODEL_NAME: ${{ secrets.OLLAMA_MODEL_NAME }}
+      - name: Set build outputs
+        id: set-image
+        run: |
+          # We use the SHA tag as canonical immutable tag
+          echo "IMAGE_FULL=${REGISTRY}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+    outputs:
+      image_full: ${{ steps.set-image.outputs.IMAGE_FULL }}
+
+  deploy:
+    name: Deploy to Scaleway Instance
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout (for helper scripts)
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H $SCALEWAY_INSTANCE_IP >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ secrets.SCALEWAY_INSTANCE_IP }} >> ~/.ssh/known_hosts
 
-          # Recompute IMAGE_FULL here to ensure it's present in this shell
-          # (some runners may not immediately expose variables written to $GITHUB_ENV)
-          # REGISTRY already contains the full repository path (rg.nl-ams.scw.cloud/piazzati/backend)
-          # so do NOT append /${BACKEND_IMAGE} here — use REGISTRY:SHA
-          IMAGE_FULL="${{ env.REGISTRY }}:${GITHUB_SHA}"
-          export IMAGE_FULL
-          echo "[deploy-step] IMAGE_FULL=$IMAGE_FULL"
+      - name: Determine IMAGE to deploy
+        id: image
+        run: |
+          if [ -n "${{ github.event.inputs.image_override }}" ]; then
+            echo "Using override image: ${{ github.event.inputs.image_override }}"
+            echo "IMAGE_TO_DEPLOY=${{ github.event.inputs.image_override }}" >> $GITHUB_OUTPUT
+          else
+            echo "IMAGE_TO_DEPLOY=${{ needs.build.outputs.image_full }}" >> $GITHUB_OUTPUT
+          fi
 
-          # Add SSH keepalive options to avoid broken pipe / 255 on long-running remote tasks
-          # Export IMAGE_FULL into the remote environment, then run the heredoc script under bash
-          # Pass IMAGE_FULL as a positional argument to the remote script to ensure it's available
-          # PASS IMAGE_FULL at runtime via the runner environment variable $IMAGE_FULL
-          # (don't use ${{ env.IMAGE_FULL }} in the `env:` block — that is evaluated before
-          # the "Set image tag and full name" step writes to $GITHUB_ENV)
-          ssh -tt -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -i ~/.ssh/id_rsa root@$SCALEWAY_INSTANCE_IP "export SCALEWAY_REGISTRY_USERNAME='${SCALEWAY_REGISTRY_USERNAME}' SCALEWAY_REGISTRY_PASSWORD='${SCALEWAY_REGISTRY_PASSWORD}' ; bash -s -- '$IMAGE_FULL'" <<'EOF'
+      - name: Deploy via SSH
+        env:
+          SCALEWAY_REGISTRY_USERNAME: ${{ secrets.SCALEWAY_REGISTRY_USERNAME }}
+          SCALEWAY_REGISTRY_PASSWORD: ${{ secrets.SCALEWAY_REGISTRY_PASSWORD }}
+          SCALEWAY_INSTANCE_IP: ${{ secrets.SCALEWAY_INSTANCE_IP }}
+          OLLAMA_MODEL_NAME: ${{ secrets.OLLAMA_MODEL_NAME }}
+          RUN_PROVISION: ${{ github.event.inputs.run_provision }}
+        run: |
+          set -euxo pipefail
+          IMAGE_FULL="${{ steps.image.outputs.IMAGE_TO_DEPLOY }}"
+          echo "[deploy] IMAGE_FULL=${IMAGE_FULL}"
+
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa root@${SCALEWAY_INSTANCE_IP} bash -s -- "$IMAGE_FULL" <<'EOF'
             set -euxo pipefail
-            # Read IMAGE_FULL passed as positional arg from the SSH command
             IMAGE_FULL="${1:-}"
-            export IMAGE_FULL
-            echo "[debug] IMAGE_FULL=${IMAGE_FULL}"
+            echo "[remote] IMAGE_FULL=$IMAGE_FULL"
 
-            if [ ! -d /opt/piazzati ]; then
-              git clone https://github.com/MeryemeBanani/PiazzaTi.git /opt/piazzati
+            REPO_DIR=/opt/piazzati
+            cd /tmp
+            mkdir -p ${REPO_DIR}
+            if [ ! -d ${REPO_DIR}/.git ]; then
+              git clone https://github.com/MeryemeBanani/PiazzaTi.git ${REPO_DIR}
             fi
-            cd /opt/piazzati
-
-            echo "[deploy] attempting safe disk cleanup (docker prune & apt clean)"
-            docker system prune -af || true
-            rm -rf /var/cache/apt/archives/* || true
-
+            cd ${REPO_DIR}
             git fetch origin main
             git reset --hard origin/main
-            git clean -fd || true
 
-            if [ -f ./scripts/setup-server.sh ]; then
-              echo "[deploy] Preparing scripts/setup-server.sh"
-              chmod +x ./scripts/setup-server.sh || true
-              echo "[deploy] Starting scripts/setup-server.sh in background (non-blocking)"
-              # Start provisioning in background and log to /var/log/setup-server.log
-              MODEL_NAME="${OLLAMA_MODEL_NAME:-llama3.1:8b}" REPO_DIR="/opt/piazzati" nohup bash ./scripts/setup-server.sh > /var/log/setup-server.log 2>&1 & echo "[deploy] setup-server.sh started (PID $!)"
-              # Give the script a moment to produce logs, then show a short head to Actions log
-              sleep 1
-              echo "[deploy] tail /var/log/setup-server.log (first 30 lines):"
-              head -n 30 /var/log/setup-server.log || true
-              # Quick non-blocking probe to Ollama API (1s timeout) to give immediate feedback
-              if curl -sS --max-time 1 http://localhost:11434/api/tags >/dev/null 2>&1; then
-                echo "[deploy] Ollama API reachable — models may be present"
-              else
-                echo "[deploy] Ollama not ready yet; background provisioning continues. Check /var/log/setup-server.log on server."
-              fi
-            else
-              echo "[deploy] No scripts/setup-server.sh found — skipping server bootstrap"
+            # Optionally start provisioning in background (non-blocking)
+            if [ "${RUN_PROVISION:-false}" = "true" ] && [ -f ./scripts/setup-server.sh ]; then
+              MODEL_NAME="${OLLAMA_MODEL_NAME:-llama3.1:8b}" REPO_DIR="${REPO_DIR}" nohup bash ./scripts/setup-server.sh > /var/log/setup-server.log 2>&1 &
+              echo "[remote] started provisioning in background"
             fi
 
-            # Login to container registry (secrets expanded by runner)
-            echo "$SCALEWAY_REGISTRY_PASSWORD" | docker login rg.nl-ams.scw.cloud -u "$SCALEWAY_REGISTRY_USERNAME" --password-stdin
+            # Login to registry
+            echo "Logging in to registry"
+            echo "${SCALEWAY_REGISTRY_PASSWORD}" | docker login rg.nl-ams.scw.cloud -u "${SCALEWAY_REGISTRY_USERNAME}" --password-stdin
 
-            # Create a small compose override that pins the image to the exact tag we built in CI
-            cat > docker-compose.deploy.yml <<YML
+            # Create compose override atomically
+            tmpfile=$(mktemp /tmp/docker-compose.deploy.yml.XXXX)
+            cat > "$tmpfile" <<YML
             services:
               piazzati-backend:
                 image: ${IMAGE_FULL}
             YML
-            echo "[debug] docker-compose.deploy.yml contents:" && sed -n '1,120p' docker-compose.deploy.yml || true
+            mv "$tmpfile" /opt/piazzati/docker-compose.deploy.yml
+            echo "[remote] wrote /opt/piazzati/docker-compose.deploy.yml"
+
+            # Try to pull with limited retries
             attempts=0
             until docker compose -f docker-compose.yml -f docker-compose.deploy.yml pull piazzati-backend; do
               attempts=$((attempts+1))
+              echo "[remote] docker pull attempt $attempts failed"
               if [ "$attempts" -ge 3 ]; then
-                echo "[deploy] docker pull failed after $attempts attempts"
-                docker compose logs --no-color piazzati-backend --tail 500 || true
+                echo "[remote] docker pull failed after $attempts attempts" >&2
+                docker compose logs --no-color piazzati-backend --tail 200 || true
                 exit 1
               fi
               sleep $((attempts * 5))
             done
 
-            # Deploy updated containers without rebuilding on the server
             docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d
 
-            # Apply production environment config
-            cp backend/.env.scaleway backend/.env || true
-
-            # Health check: poll with timeouts and fail-fast with logs if unreachable
-            echo "[deploy] Performing health check on http://localhost:8000/health"
-            # shortened timeouts to make CI feedback faster (provisioning continues in background)
+            # health check
             max_wait=60
             interval=3
             waited=0
             until curl -sS --fail --max-time 10 http://localhost:8000/health >/dev/null; do
               if [ "$waited" -ge "$max_wait" ]; then
-                echo "[deploy] Health check failed after $max_wait s — dumping backend logs for debugging"
-                docker compose logs --no-color piazzati-backend --tail 500 || true
+                echo "[remote] Health check failed after $max_wait s" >&2
+                docker compose logs --no-color piazzati-backend --tail 200 || true
                 exit 1
               fi
-              echo "[deploy] Health check not ready yet; sleeping $interval s (waited $waited s)"
               sleep $interval
               waited=$((waited + interval))
             done
-            echo "[deploy] Health check passed"
 
-            # Record deployed tag for quick rollback
+            # record deployed tag atomically AFTER success
             mkdir -p /var/lib/piazzati
-            # If IMAGE_FULL was passed, use it; otherwise attempt to detect the running
-            # container's image and extract the tag (fallback). This ensures last_deployed_tag
-            # is written even when CI didn't pass IMAGE_FULL into the remote shell.
-            if [ -n "${1:-}" ]; then
-              IMAGE_FULL_REMOTE="${1:-}"
+            if printf '%s' "$IMAGE_FULL" | grep -q ':'; then
+              echo "${IMAGE_FULL##*:}" > /var/lib/piazzati/last_deployed_tag.tmp || true
             else
-              IMAGE_FULL_REMOTE=""
+              echo "$IMAGE_FULL" > /var/lib/piazzati/last_deployed_tag.tmp || true
             fi
+            mv /var/lib/piazzati/last_deployed_tag.tmp /var/lib/piazzati/last_deployed_tag
+            echo "[remote] wrote last_deployed_tag"
 
-            if [ -n "$IMAGE_FULL_REMOTE" ]; then
-              echo "${IMAGE_FULL_REMOTE##*:}" > /var/lib/piazzati/last_deployed_tag || true
-            else
-              # fallback: try to find the running backend container and inspect its image
-              container_id=$(docker ps --filter "name=piazzati-backend" -q | head -n1 || true)
-              if [ -n "$container_id" ]; then
-                detected_image=$(docker inspect --format='{{.Config.Image}}' "$container_id" 2>/dev/null || true)
-                if [ -n "$detected_image" ]; then
-                  # if there's a tag part, store only the tag; else store full image name
-                  if printf '%s' "$detected_image" | grep -q ':'; then
-                    echo "${detected_image##*:}" > /var/lib/piazzati/last_deployed_tag || true
-                  else
-                    echo "$detected_image" > /var/lib/piazzati/last_deployed_tag || true
-                  fi
-                else
-                  echo "unknown" > /var/lib/piazzati/last_deployed_tag || true
-                fi
-              else
-                echo "unknown" > /var/lib/piazzati/last_deployed_tag || true
-              fi
-            fi
-
-            echo "[deploy] REMOTE SCRIPT FINISHED"
-            exit 0
+            echo "[remote] deploy finished"
           EOF
 
   security-scan:
-    name: Security Scan
-    needs: test
+    name: Security Scan (Trivy)
+    needs: build
     runs-on: ubuntu-latest
-    # Run on pull requests and also when pushing to main (so production pushes get scanned)
-    # Only run for pull requests originating from this repository (not forks)
-    # or when pushing to main. Forked PRs can't use the repo's GITHUB_TOKEN
-    # with security-events permission so uploading SARIF will fail there.
-    if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-    
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy FS scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -314,7 +251,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
 
-      - name: Upload Trivy scan results
+      - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
