@@ -1,0 +1,23 @@
+# Normalize line endings: keep LF in the repository for source files
+# This avoids warnings on Windows about "LF will be replaced by CRLF"
+
+# Default: detect text files and normalize to LF in the repo
+* text=auto
+
+# Force LF for common source files (Python, shell, makefiles, JSON, YAML, etc.)
+*.py    text eol=lf
+*.sh    text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf
+Makefile text eol=lf
+
+# Binary files - keep as-is
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.zip  binary
+*.gz   binary
