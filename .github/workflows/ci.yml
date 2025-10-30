@@ -187,12 +187,10 @@ jobs:
 
             # Create a small compose override that pins the image to the exact tag we built in CI
             cat > docker-compose.deploy.yml <<YML
-services:
-  piazzati-backend:
-    image: ${IMAGE_FULL}
-YML
-
-            # Pull with retry/backoff to mitigate transient network/registry errors
+            services:
+              piazzati-backend:
+                image: ${IMAGE_FULL}
+            YML
             attempts=0
             until docker compose -f docker-compose.yml -f docker-compose.deploy.yml pull piazzati-backend; do
               attempts=$((attempts+1))
