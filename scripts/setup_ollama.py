@@ -64,7 +64,10 @@ class PeriodicProgressTracker:
         # Calcola velocità media
         if elapsed > 0:
             speed_mbps = downloaded_mb / elapsed
-            eta_seconds = (self.total_mb - downloaded_mb) / speed_mbps if speed_mbps > 0 else 0
+            if speed_mbps > 0:
+                eta_seconds = (self.total_mb - downloaded_mb) / speed_mbps
+            else:
+                eta_seconds = 0
         else:
             speed_mbps = 0
             eta_seconds = 0
@@ -75,7 +78,7 @@ class PeriodicProgressTracker:
         bar = "█" * filled + "░" * (bar_width - filled)
 
         # Timestamp
-        timestamp = f"[{int(elapsed//60):02d}:{int(elapsed%60):02d}]"
+        timestamp = f"[{int(elapsed // 60):02d}:{int(elapsed % 60):02d}]"
 
         # Output formattato
         print(f"\n{timestamp} 📊 AGGIORNAMENTO DOWNLOAD")
@@ -83,7 +86,10 @@ class PeriodicProgressTracker:
         print(f"  └─ Scaricati: {downloaded_mb:.1f} / {self.total_mb:.1f} MB")
         print(f"  └─ Velocità: {speed_mbps:.1f} MB/s")
         if eta_seconds > 0 and self.current_progress < 100:
-            print(f"  └─ Tempo rimasto stimato: {int(eta_seconds//60)} min {int(eta_seconds%60)} sec")
+            print(
+                f"  └─ Tempo rimasto stimato: {int(eta_seconds // 60)} min "
+                f"{int(eta_seconds % 60)} sec"
+            )
         print(f"  └─ Status: {self.status_message}")
 
     def force_update(self, message: str = ""):
@@ -133,7 +139,12 @@ def check_system_resources():
 
     try:
         # RAM
-        result = subprocess.run(["free", "-h"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(
+            ["free", "-h"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
         lines = result.stdout.split('\n')[:2]
         print("\n💾 Memoria:")
         for line in lines:
@@ -141,7 +152,12 @@ def check_system_resources():
                 print(f"  {line}")
 
         # Disco
-        result = subprocess.run(["df", "-h", "/"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(
+            ["df", "-h", "/"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
         lines = result.stdout.split('\n')[:2]
         print("\n💿 Disco:")
         for line in lines:
@@ -163,13 +179,23 @@ def verify_ollama_installation() -> bool:
     print("="*70)
 
     try:
-        result = subprocess.run(["which", "ollama"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(
+            ["which", "ollama"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
 
         if result.returncode == 0:
-            print(f"✅ Ollama trovato: {result.stdout.strip()}")
+            print("✅ Ollama trovato: " + result.stdout.strip())
 
-            version = subprocess.run(["ollama", "--version"], capture_output=True, text=True, timeout=5)
-            print(f"📌 {version.stdout.strip()}")
+            version = subprocess.run(
+                ["ollama", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            print("📌 " + version.stdout.strip())
             return True
         else:
             print("❌ Ollama NON installato")
@@ -193,7 +219,7 @@ def start_ollama_server() -> Tuple[bool, Optional[subprocess.Popen]]:
             if response.status_code == 200:
                 print("✅ Server già attivo!")
                 return True, None
-        except:
+        except Exception:
             pass
 
         # Avvia server
@@ -213,7 +239,7 @@ def start_ollama_server() -> Tuple[bool, Optional[subprocess.Popen]]:
                     print(f" OK ({i+1}s)")
                     print(f"✅ Server pronto su {OLLAMA_HOST}")
                     return True, process
-            except:
+            except Exception:
                 pass
 
             if i % 3 == 0:
@@ -247,7 +273,7 @@ def check_model_exists(model_name: str) -> bool:
                     print("   └─ Skip download")
                     return True
 
-            print(f"📥 Modello NON trovato - download necessario")
+            print("📥 Modello NON trovato - download necessario")
             return False
     except Exception as e:
         print(f"⚠️  Errore verifica: {e}")
@@ -260,7 +286,7 @@ def download_model_with_periodic_updates(model_name: str) -> bool:
     print(f"📥 DOWNLOAD {model_name} (~4.7GB)")
     print("="*70)
     print(f"⏰ Inizio: {datetime.now().strftime('%H:%M:%S')}")
-    print(f"⚠️  Tempo stimato: 10-20 minuti su Colab")
+    print("⚠️  Tempo stimato: 10-20 minuti su Colab")
     print(f"📊 Aggiornamenti ogni {PROGRESS_UPDATE_INTERVAL} secondi")
     print("="*70)
 
@@ -326,10 +352,13 @@ def download_model_with_periodic_updates(model_name: str) -> bool:
             tracker.force_update()
 
             elapsed = time.time() - start_time
-            print(f"\n{'='*70}")
-            print(f"✅ DOWNLOAD COMPLETATO!")
-            print(f"⏱️  Tempo totale: {int(elapsed//60)} min {int(elapsed%60)} sec")
-            print(f"{'='*70}")
+            print("\n" + "=" * 70)
+            print("✅ DOWNLOAD COMPLETATO!")
+            print(
+                f"⏱️  Tempo totale: {int(elapsed // 60)} min "
+                f"{int(elapsed % 60)} sec"
+            )
+            print("=" * 70)
             return True
         else:
             print(f"\n❌ Download fallito (exit code: {return_code})")
@@ -342,7 +371,7 @@ def download_model_with_periodic_updates(model_name: str) -> bool:
         return False
 
     except KeyboardInterrupt:
-        print(f"\n⚠️  Download interrotto dall'utente")
+        print("\n⚠️  Download interrotto dall'utente")
         process.kill()
         return False
 
@@ -374,7 +403,7 @@ def verify_model_ready(model_name: str) -> bool:
             result = response.json()
             text = result.get("response", "").strip()
             print(" OK")
-            print(f"✅ Modello funzionante!")
+            print("✅ Modello funzionante!")
             # Mostra i primi 50 caratteri e aggiunge '...' se la risposta è più lunga
             preview = text[:50] + ("..." if len(text) > 50 else "")
             print(f"   Risposta: '{preview}'")
@@ -384,7 +413,7 @@ def verify_model_ready(model_name: str) -> bool:
             return False
 
     except Exception as e:
-        print(f" ERRORE")
+        print(" ERRORE")
         print(f"❌ Test fallito: {e}")
         return False
 
@@ -429,9 +458,13 @@ def setup_ollama_complete():
         # (see CLI flags implemented in the __main__ section)
         print(f"\n⚡ Modello non presente: {MODEL_NAME}")
         # If caller requested checks only or no-pull, abort here
-        if getattr(setup_ollama_complete, "_no_pull", False) or getattr(setup_ollama_complete, "_check_only", False):
+        if (
+            getattr(setup_ollama_complete, "_no_pull", False)
+            or getattr(setup_ollama_complete, "_check_only", False)
+        ):
             print("\n⚠️  Skip download per flag (--no-pull / --check-only).")
-            print("   └─ Esegui manualmente su server o usa lo script shell di provisioning.")
+            print("   └─ Esegui manualmente su server o usa lo script shell")
+            print("     di provisioning.")
             return False
 
         print(f"\n⚡ Inizio download {MODEL_NAME}...")
@@ -446,14 +479,17 @@ def setup_ollama_complete():
 
     # Riepilogo
     total_time = time.time() - overall_start
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🎉 SETUP COMPLETATO!")
-    print("="*70)
-    print(f"⏱️  Tempo totale: {int(total_time//60)} min {int(total_time%60)} sec")
-    print(f"✅ Modello: {MODEL_NAME}")
-    print(f"🌐 Server: {OLLAMA_HOST}")
-    print(f"📝 Pronto per parsing CV/JD")
-    print("="*70 + "\n")
+    print("=" * 70)
+    print(
+        f"⏱️  Tempo totale: {int(total_time // 60)} min "
+        f"{int(total_time % 60)} sec"
+    )
+    print("✅ Modello: " + MODEL_NAME)
+    print("🌐 Server: " + OLLAMA_HOST)
+    print("📝 Pronto per parsing CV/JD")
+    print("=" * 70 + "\n")
 
     return True
 
@@ -463,11 +499,32 @@ def setup_ollama_complete():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Setup Ollama con monitoring periodico")
-    parser.add_argument("--check-only", action="store_true", help="Esegui solo i controlli (non scaricare)")
-    parser.add_argument("--no-pull", action="store_true", help="Non effettuare il pull del modello (alias di --check-only)")
-    parser.add_argument("--log-file", type=str, default=None, help="Percorso file di log per duplicare stdout/stderr")
-    parser.add_argument("--timeout", type=int, default=None, help="Timeout massimo per il download in secondi (override)")
+    parser = argparse.ArgumentParser(
+        description="Setup Ollama con monitoring periodico",
+    )
+    parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Esegui solo i controlli (non scaricare)",
+    )
+    parser.add_argument(
+        "--no-pull",
+        action="store_true",
+        help=("Non effettuare il pull del modello (alias di "
+              "--check-only)"),
+    )
+    parser.add_argument(
+        "--log-file",
+        type=str,
+        default=None,
+        help="Percorso file di log per duplicare stdout/stderr",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=None,
+        help="Timeout massimo per il download in secondi (override)",
+    )
     args = parser.parse_args()
 
     # If requested, tee stdout/stderr to logfile

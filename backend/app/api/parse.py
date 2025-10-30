@@ -6,7 +6,14 @@ from pathlib import Path
 from app.parsers.ollama_cv_parser import OllamaCVParser
 from app.utils.parsing_display import display_parsing_results
 from typing import Optional
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    File,
+    HTTPException,
+    UploadFile,
+)
+import importlib.util
 from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/parse", tags=["parse"])
@@ -23,12 +30,7 @@ def get_parser() -> OllamaCVParser:
     return _parser
 
 
-try:
-    import multipart  # type: ignore
-
-    MULTIPART_AVAILABLE = True
-except Exception:
-    MULTIPART_AVAILABLE = False
+MULTIPART_AVAILABLE = importlib.util.find_spec("multipart") is not None
 
 
 if MULTIPART_AVAILABLE:
@@ -40,8 +42,9 @@ if MULTIPART_AVAILABLE:
     ):
         """Upload a PDF and parse it.
 
-        If background=True the task will be scheduled and a 202 returned with a "task_id".
-        Otherwise the parsing will be done synchronously and the parsed document returned.
+        If background=True the task will be scheduled and a 202 returned
+        with a "task_id". Otherwise the parsing will be done synchronously
+        and the parsed document returned.
         """
         if file.content_type not in ("application/pdf",):
             raise HTTPException(status_code=400, detail="Only PDF uploads are accepted")
@@ -68,7 +71,10 @@ if MULTIPART_AVAILABLE:
                     print(f"Background parse failed: {e}")
 
             if background_tasks is None:
-                raise HTTPException(status_code=500, detail="Background tasks unavailable")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Background tasks unavailable",
+                )
 
             background_tasks.add_task(_bg)
             return JSONResponse(status_code=202, content={"task_id": task_id})
