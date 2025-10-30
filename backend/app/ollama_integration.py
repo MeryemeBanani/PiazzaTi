@@ -1,9 +1,8 @@
 import subprocess
-import requests
 import time
 
+import requests
 from fastapi import FastAPI
-
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 

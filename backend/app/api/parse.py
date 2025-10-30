@@ -1,17 +1,19 @@
-from fastapi import APIRouter, UploadFile, File, BackgroundTasks, HTTPException
-from fastapi.responses import JSONResponse
-from typing import Any
-from app.parsers.ollama_cv_parser import OllamaCVParser
-from app.utils.parsing_display import display_parsing_results
-from pathlib import Path
 import tempfile
 import time
 import uuid
+from pathlib import Path
+
+from app.parsers.ollama_cv_parser import OllamaCVParser
+from app.utils.parsing_display import display_parsing_results
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/parse", tags=["parse"])
 
+
 # Lazy singleton parser to avoid re-init per request
 _parser: OllamaCVParser = None
+
 
 def get_parser() -> OllamaCVParser:
     global _parser
@@ -21,7 +23,11 @@ def get_parser() -> OllamaCVParser:
 
 
 @router.post("/upload")
-async def upload_and_parse(file: UploadFile = File(...), background: bool = True, background_tasks: BackgroundTasks = None):
+async def upload_and_parse(
+    file: UploadFile = File(...),
+    background: bool = True,
+    background_tasks: BackgroundTasks | None = None,
+):
     """Upload a PDF and parse it.
 
     If background=True the task will be scheduled and a 202 returned with a "task_id".
@@ -42,16 +48,29 @@ async def upload_and_parse(file: UploadFile = File(...), background: bool = True
     if background:
         # schedule
         task_id = str(uuid.uuid4())
+
         def _bg():
             try:
-                doc = parser.parse(str(dest))
-                # persist doc somewhere or push to queue (TODO)
+                # run parser, ignore return (persistence should be implemented)
+                parser.parse(str(dest))
                 print(f"Background parse finished: {task_id}")
             except Exception as e:
                 print(f"Background parse failed: {e}")
+
+        if background_tasks is None:
+            raise HTTPException(status_code=500, detail="Background tasks unavailable")
+
         background_tasks.add_task(_bg)
         return JSONResponse(status_code=202, content={"task_id": task_id})
     else:
         doc = parser.parse(str(dest))
         text_summary = display_parsing_results(doc)
-        return JSONResponse(status_code=200, content={"parsed": doc.model_dump(), "summary": text_summary})
+        parsed = (
+            doc.model_dump()
+            if hasattr(doc, "model_dump")
+            else getattr(doc, "dict", lambda: {})()
+        )
+
+        return JSONResponse(
+            status_code=200, content={"parsed": parsed, "summary": text_summary}
+        )

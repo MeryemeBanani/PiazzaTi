@@ -1,8 +1,8 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+from typing import List, Optional
 
+from pydantic import BaseModel, Field
 
 # ========================================================================
 # ENUMS
@@ -27,22 +27,21 @@ class SkillSource(str, Enum):
 
 class PersonalInfo(BaseModel):
     """
-     UPDATED v1.4.10: Added 'address' field, deprecated 'street'.
+    UPDATED v1.4.10: Added 'address' field, deprecated 'street'.
     """
+
     full_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
 
     # NEW: Unified address field
     address: Optional[str] = Field(
-        None,
-        description="Full address: Via Roma 156, 35100 Padova (PD)"
+        None, description="Full address: Via Roma 156, 35100 Padova (PD)"
     )
 
     city: Optional[str] = None
     state: Optional[str] = Field(
-        None,
-        description="DEPRECATED: Always null, will be removed"
+        None, description="DEPRECATED: Always null, will be removed"
     )
     country: Optional[str] = None
     postal_code: Optional[str] = None
@@ -54,8 +53,7 @@ class PersonalInfo(BaseModel):
 
     #  DEPRECATED: Use 'address' instead
     street: Optional[str] = Field(
-        None,
-        description="DEPRECATED: Use 'address' field instead"
+        None, description="DEPRECATED: Use 'address' field instead"
     )
 
 
@@ -207,7 +205,9 @@ class ParsedDocument(BaseModel):
         if not self.preferences:
             self.add_warning("LOW: No job preferences found (optional section)")
         if len(self.all_spans) == 0:
-            self.add_warning("INFO: No XAI spans extracted (explainability unavailable)")
+            self.add_warning(
+                "INFO: No XAI spans extracted (explainability unavailable)"
+            )
 
     def compute_section_confidence(self):
         """Compute confidence scores for each section."""
@@ -216,62 +216,80 @@ class ParsedDocument(BaseModel):
             self.personal_info.full_name,
             self.personal_info.email,
             self.personal_info.phone,
-            self.personal_info.city
+            self.personal_info.city,
         ]
-        self.section_confidence['personal_info'] = sum(1 for f in personal_fields if f) / len(personal_fields)
+        self.section_confidence["personal_info"] = sum(
+            1 for f in personal_fields if f
+        ) / len(personal_fields)
 
         # Summary
-        self.section_confidence['summary'] = 1.0 if self.summary else 0.0
+        self.section_confidence["summary"] = 1.0 if self.summary else 0.0
 
         # Experience
         if len(self.experience) > 0:
             exp_scores = []
             for exp in self.experience:
-                score = sum([
-                    1 if exp.title else 0,
-                    1 if exp.company else 0,
-                    1 if exp.start_date else 0,
-                    0.5 if exp.description else 0
-                ]) / 3.5
+                score = (
+                    sum(
+                        [
+                            1 if exp.title else 0,
+                            1 if exp.company else 0,
+                            1 if exp.start_date else 0,
+                            0.5 if exp.description else 0,
+                        ]
+                    )
+                    / 3.5
+                )
                 exp_scores.append(score)
-            self.section_confidence['experience'] = sum(exp_scores) / len(exp_scores)
+            self.section_confidence["experience"] = sum(exp_scores) / len(exp_scores)
         else:
-            self.section_confidence['experience'] = 0.0
+            self.section_confidence["experience"] = 0.0
 
         # Education
         if len(self.education) > 0:
             edu_scores = []
             for edu in self.education:
-                score = sum([
-                    1 if edu.degree else 0,
-                    1 if edu.institution else 0,
-                    0.5 if edu.graduation_year else 0
-                ]) / 2.5
+                score = (
+                    sum(
+                        [
+                            1 if edu.degree else 0,
+                            1 if edu.institution else 0,
+                            0.5 if edu.graduation_year else 0,
+                        ]
+                    )
+                    / 2.5
+                )
                 edu_scores.append(score)
-            self.section_confidence['education'] = sum(edu_scores) / len(edu_scores)
+            self.section_confidence["education"] = sum(edu_scores) / len(edu_scores)
         else:
-            self.section_confidence['education'] = 0.0
+            self.section_confidence["education"] = 0.0
 
         # Skills
-        self.section_confidence['skills'] = 1.0 if len(self.skills) >= 3 else len(self.skills) / 3
+        self.section_confidence["skills"] = (
+            1.0 if len(self.skills) >= 3 else len(self.skills) / 3
+        )
 
         # Languages
-        self.section_confidence['languages'] = 1.0 if len(self.languages) >= 2 else len(self.languages) / 2
+        self.section_confidence["languages"] = (
+            1.0 if len(self.languages) >= 2 else len(self.languages) / 2
+        )
 
         # Certifications
-        self.section_confidence['certifications'] = 1.0 if len(self.certifications) >= 1 else 0.0
+        self.section_confidence["certifications"] = (
+            1.0 if len(self.certifications) >= 1 else 0.0
+        )
 
         # Preferences
-        self.section_confidence['preferences'] = 1.0 if self.preferences else 0.0
+        self.section_confidence["preferences"] = 1.0 if self.preferences else 0.0
 
         # Overall confidence
         weights = {
-            'personal_info': 0.25,
-            'experience': 0.25,
-            'education': 0.20,
-            'skills': 0.15,
-            'languages': 0.10,
-            'certifications': 0.05
+            "personal_info": 0.25,
+            "experience": 0.25,
+            "education": 0.20,
+            "skills": 0.15,
+            "languages": 0.10,
+            "certifications": 0.05,
         }
 
         self.confidence_score = sum(
@@ -281,11 +299,24 @@ class ParsedDocument(BaseModel):
 
     def detect_low_confidence_sections_v2(self):
         """Detect sections with low confidence."""
-        for section_key in ['personal_info', 'experience', 'education', 'skills', 'languages', 'certifications']:
+        for section_key in [
+            "personal_info",
+            "experience",
+            "education",
+            "skills",
+            "languages",
+            "certifications",
+        ]:
             confidence = self.section_confidence.get(section_key, 0.0)
             if confidence == 0.0:
-                self.add_warning(f"HIGH: Very low confidence for '{section_key}' ({confidence:.2f})")
+                self.add_warning(
+                    f"HIGH: Very low confidence for '{section_key}' ({confidence:.2f})"
+                )
             elif confidence < 0.5:
-                self.add_warning(f"HIGH: Low confidence for '{section_key}' ({confidence:.2f})")
+                self.add_warning(
+                    f"HIGH: Low confidence for '{section_key}' ({confidence:.2f})"
+                )
             elif confidence < 0.7:
-                self.add_warning(f"MEDIUM: Moderate confidence for '{section_key}' ({confidence:.2f})")
+                self.add_warning(
+                    f"MEDIUM: Moderate confidence for '{section_key}' ({confidence:.2f})"
+                )

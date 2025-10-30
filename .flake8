@@ -1,0 +1,22 @@
+[flake8]
+max-line-length = 88
+exclude =
+    .git,
+    __pycache__,
+    backend/venv,
+    backend\\venv,
+    venv,
+    .venv,
+    env,
+    build,
+    dist,
+    node_modules,
+    frontend/node_modules,
+    docs
+extend-ignore = E203, W503
+per-file-ignores =
+    backend/alembic/**: E501, W291, E402
+    backend/app/parsers/ollama_cv_parser.py: E501
+    backend/app/utils/parsing_display.py: E501
+    backend/app/schemas/parsed_document.py: E501
+    backend/tests/test_system.py: E501

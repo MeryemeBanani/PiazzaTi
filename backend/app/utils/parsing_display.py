@@ -1,4 +1,5 @@
-from typing import Tuple, Dict, Any
+from typing import Any, Dict, Tuple
+
 from app.schemas.parsed_document import ParsedDocument
 
 
@@ -14,20 +15,28 @@ def display_parsing_results(doc: ParsedDocument) -> str:
     if doc.personal_info:
         pi = doc.personal_info
         lines.append("\nPersonal Info:")
-        if pi.full_name: lines.append(f"  Name: {pi.full_name}")
-        if pi.email: lines.append(f"  Email: {pi.email}")
-        if pi.phone: lines.append(f"  Phone: {pi.phone}")
-        if getattr(pi, 'address', None): lines.append(f"  Address: {pi.address}")
+        if pi.full_name:
+            lines.append(f"  Name: {pi.full_name}")
+        if pi.email:
+            lines.append(f"  Email: {pi.email}")
+        if pi.phone:
+            lines.append(f"  Phone: {pi.phone}")
+        if getattr(pi, "address", None):
+            lines.append(f"  Address: {pi.address}")
 
     if doc.experiences:
         lines.append("\nExperiences:")
         for e in doc.experiences[:6]:
-            lines.append(f"  - {e.title} @ {e.company} ({e.start_date or '?'} - {e.end_date or 'present'})")
+            lines.append(
+                f"  - {e.title} @ {e.company} ({e.start_date or '?'} - {e.end_date or 'present'})"
+            )
 
     if doc.education:
         lines.append("\nEducation:")
         for ed in doc.education[:4]:
-            lines.append(f"  - {ed.degree or ed.institution} ({ed.start_date or '?'} - {ed.end_date or '?'})")
+            lines.append(
+                f"  - {ed.degree or ed.institution} ({ed.start_date or '?'} - {ed.end_date or '?'})"
+            )
 
     if doc.skills:
         lines.append("\nSkills:")
@@ -45,11 +54,14 @@ def display_parsing_results(doc: ParsedDocument) -> str:
 def compute_extraction_stats(doc: ParsedDocument) -> Dict[str, Any]:
     """Compute simple statistics for parsed document quality."""
     stats = {
-        'n_experiences': len(doc.experiences or []),
-        'n_education': len(doc.education or []),
-        'n_skills': len(doc.skills or []),
-        'n_languages': len(doc.languages or []),
-        'has_personal_info': bool(doc.personal_info and (doc.personal_info.email or doc.personal_info.full_name)),
+        "n_experiences": len(doc.experiences or []),
+        "n_education": len(doc.education or []),
+        "n_skills": len(doc.skills or []),
+        "n_languages": len(doc.languages or []),
+        "has_personal_info": bool(
+            doc.personal_info
+            and (doc.personal_info.email or doc.personal_info.full_name)
+        ),
     }
     return stats
 
@@ -65,16 +77,16 @@ def validate_parsing_quality(doc: ParsedDocument) -> Tuple[bool, Dict[str, Any]]
     stats = compute_extraction_stats(doc)
     report.update(stats)
 
-    if not stats['has_personal_info']:
+    if not stats["has_personal_info"]:
         is_ok = False
-        report['missing'] = report.get('missing', []) + ['personal_info']
+        report["missing"] = report.get("missing", []) + ["personal_info"]
 
-    if stats['n_experiences'] == 0 and stats['n_education'] == 0:
+    if stats["n_experiences"] == 0 and stats["n_education"] == 0:
         is_ok = False
-        report['missing'] = report.get('missing', []) + ['experiences_or_education']
+        report["missing"] = report.get("missing", []) + ["experiences_or_education"]
 
-    if stats['n_skills'] < 3:
-        report['low_skills'] = True
+    if stats["n_skills"] < 3:
+        report["low_skills"] = True
 
     return is_ok, report
 

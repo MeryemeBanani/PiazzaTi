@@ -1,33 +1,30 @@
-from fastapi import FastAPI, Depends, Request
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-from app.database import get_db
-from app.api.parse import router as parse_router
 import os
-from opentelemetry import trace, metrics
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.exporter.prometheus import PrometheusMetricReader
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+from app.api.parse import router as parse_router
+from app.database import get_db
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from opentelemetry import metrics, trace
+from opentelemetry.exporter.prometheus import PrometheusMetricReader
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-resource = Resource.create({
-    "service.name": "piazzati-backend",
-    "service.version": "1.0.0"
-})
+resource = Resource.create(
+    {"service.name": "piazzati-backend", "service.version": "1.0.0"}
+)
 
 prometheus_reader = PrometheusMetricReader(
     disable_target_info=True  # Disabilita target_info che causa problemi di parsing
 )
-meter_provider = MeterProvider(
-    metric_readers=[prometheus_reader],
-    resource=resource
-)
+meter_provider = MeterProvider(metric_readers=[prometheus_reader], resource=resource)
 metrics.set_meter_provider(meter_provider)  # imposto il provider globale
 
 tracer_provider = TracerProvider()  # tracce: richieste propagate nell'app
@@ -53,25 +50,25 @@ Psycopg2Instrumentor().instrument()
 request_count = meter.create_counter(
     "piazzati_custom_requests_total",
     description="Total number of requests tracked by custom counter",
-    unit="1"
+    unit="1",
 )
 
 request_duration = meter.create_histogram(
     "piazzati_custom_request_duration_seconds",
     description="Request duration in seconds tracked by custom histogram",
-    unit="s"
+    unit="s",
 )
 
 database_operations = meter.create_counter(
     "piazzati_custom_database_operations_total",
     description="Total number of database operations tracked by custom counter",
-    unit="1"
+    unit="1",
 )
 
 active_users = meter.create_up_down_counter(
     "piazzati_custom_active_users",
     description="Number of active users tracked by custom counter",
-    unit="1"
+    unit="1",
 )
 
 
@@ -79,10 +76,7 @@ active_users = meter.create_up_down_counter(
 async def root(request: Request):
     accept = request.headers.get("accept", "")
     if "application/json" in accept:
-        return {
-            "message": "Benvenuto su PiazzaTi!",
-            "image": "/static/PIAZZATI.IT.png"
-        }
+        return {"message": "Benvenuto su PiazzaTi!", "image": "/static/PIAZZATI.IT.png"}
     return HTMLResponse(
         """
         <html>
@@ -140,6 +134,7 @@ async def root(request: Request):
 async def get_metrics():
     """Endpoint per le metriche Prometheus"""
     from fastapi import Response
+
     data = generate_latest()
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)
 
@@ -152,9 +147,7 @@ async def health_check():
     return {
         "status": "healthy",
         "database_configured": bool(database_url),
-        "database_url_preview": (
-            database_url[:30] + "..." if database_url else None
-        )
+        "database_url_preview": (database_url[:30] + "..." if database_url else None),
     }
 
 

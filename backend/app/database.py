@@ -1,8 +1,8 @@
+import os
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker
-import os
+from sqlalchemy.orm import declarative_base, sessionmaker
+
 # Le variabili d'ambiente sono caricate da Docker Compose tramite env_file
 
 
