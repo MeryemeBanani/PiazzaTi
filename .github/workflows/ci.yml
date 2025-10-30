@@ -186,11 +186,9 @@ jobs:
 
             # Create compose override atomically
             tmpfile=$(mktemp /tmp/docker-compose.deploy.yml.XXXX)
-            cat > "$tmpfile" <<YML
-            services:
-              piazzati-backend:
-                image: ${IMAGE_FULL}
-            YML
+            # write the small compose override without a nested here-doc (avoids indentation
+            # issues when the script itself is indented inside the YAML file)
+            printf '%s\n' "services:" "  piazzati-backend:" "    image: ${IMAGE_FULL}" > "$tmpfile"
             mv "$tmpfile" /opt/piazzati/docker-compose.deploy.yml
             echo "[remote] wrote /opt/piazzati/docker-compose.deploy.yml"
 
