@@ -1,6 +1,5 @@
 import argparse
-from app.parsers.ollama_cv_parser import OllamaCVParser
-from app.utils.parsing_display import display_parsing_results
+from app.parsers.ollama_cv_parser import OllamaCVParser, display_parsing_results
 
 
 def main():

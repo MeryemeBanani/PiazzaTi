@@ -1,3 +1,5 @@
+
+
 #!/bin/bash
 set -euo pipefail
 # Helper to stop stray uvicorns and start backend using the project venv and .env
