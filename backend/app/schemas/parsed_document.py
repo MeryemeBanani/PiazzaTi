@@ -310,7 +310,7 @@ class ParsedDocument(BaseModel):
             confidence = self.section_confidence.get(section_key, 0.0)
             if confidence == 0.0:
                 self.add_warning(
-                    f"HIGH: Very low confidence for '{section_key}' ({confidence:.2f})"
+                    f"HIGH: Low confidence for '{section_key}' ({confidence:.2f})"
                 )
             elif confidence < 0.5:
                 self.add_warning(

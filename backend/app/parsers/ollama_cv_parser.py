@@ -34,7 +34,7 @@ class OllamaCVParser:
 
         print("Initializing parser v1.7.4 FINAL...")
 
-        # Instantiate LLM client if available; otherwise keep None and handle at call sites
+        # Instantiate LLM client if available;
         if Ollama is not None:
             try:
                 self.llm = Ollama(
@@ -577,7 +577,7 @@ class OllamaCVParser:
 
     def _get_robust_prompt(self, text: str) -> str:
         """Robust prompt for standard CVs."""
-        return f"""Extract CV data into VALID JSON.
+        prompt_template = """Extract CV data into VALID JSON.
 
 RULES:
 1. Output ONLY valid JSON
@@ -587,20 +587,24 @@ RULES:
 5. Certifications: Full names
 
 SCHEMA:
-{{
-  "personal_info": {{"full_name": "Name", "email": "email", "phone": "phone", "address": "Via X", "city": "City", "country": "Country"}},
-  "summary": "Professional summary",
-  "experience": [{{"title": "Job", "company": "Company", "city": "City", "start_date": "YYYY", "end_date": "YYYY", "responsibilities": ["r1"]}}],
-  "education": [{{"degree": "Degree", "institution": "Institution", "graduation_year": 2020, "gpa": "110/110"}}],
-  "skills": [{{"name": "Python"}}],
-  "languages": [{{"name": "Italiano", "proficiency": "Madrelingua"}}],
-  "certifications": [{{"name": "Cert", "date_obtained": "2023"}}]
-}}
+{
+    "personal_info": {"full_name": "Name",
+    "email": "email", "phone": "phone", "address": "Via X", "city": "City", "country": "Country"},
+    "summary": "Professional summary",
+    "experience": [{"title": "Job", "company": "Company",
+    "city": "City", "start_date": "YYYY", "end_date": "YYYY", "responsibilities": ["r1"]}],
+    "education": [{"degree": "Degree", "institution": "Institution",
+    "graduation_year": 2020, "gpa": "110/110"}],
+    "skills": [{"name": "Python"}],
+    "languages": [{"name": "Italiano", "proficiency": "Madrelingua"}],
+    "certifications": [{"name": "Cert", "date_obtained": "2023"}]
+}
 
 CV:
 {text}
 
 JSON:"""
+        return prompt_template.replace("{text}", text)
 
     def _parse_json_response(self, response: str) -> ParsedDocument:
         """Parse JSON response."""
@@ -772,20 +776,17 @@ JSON:"""
             # Check if needs enrichment
             if exp.description:
                 if self._is_high_quality_description(exp.description):
-                    print(
-                        f"        [{i+1}/{min(max_process, len(data.experience))}] {exp.title[:30]}: Skip (high quality)"
-                    )
+                    header = f"[{i+1}/{min(max_process, len(data.experience))}] {exp.title[:30]}"
+                    print(f"{header}: Skip (high quality)")
                     skipped_count += 1
                     continue
                 else:
-                    print(
-                        f"        [{i+1}/{min(max_process, len(data.experience))}] {exp.title[:30]}: Improving..."
-                    )
+                    header = f"[{i+1}/{min(max_process, len(data.experience))}] {exp.title[:30]}"
+                    print(f"        {header}: Improving...")
                     action = "improve"
             else:
-                print(
-                    f"        [{i+1}/{min(max_process, len(data.experience))}] {exp.title[:30]}: Generating..."
-                )
+                header = f"[{i+1}/{min(max_process, len(data.experience))}] {exp.title[:30]}"
+                print(f"        {header}: Generating...")
                 action = "generate"
 
             # Try to generate description (with retry)
@@ -805,7 +806,8 @@ JSON:"""
         total_processed = enriched_count + improved_count
         if total_processed > 0:
             print(
-                f"      ✓ Generated: {enriched_count}, Improved: {improved_count}, Skipped: {skipped_count}"
+                f"      ✓ Generated: {enriched_count}, "
+                f"Improved: {improved_count}, Skipped: {skipped_count}"
             )
         else:
             print(f"      ✓ Skipped: {skipped_count} (all high quality)")
@@ -976,7 +978,8 @@ DESCRIPTION:"""
         try:
             if not getattr(self, "llm", None):
                 print(
-                    "      [WARN] LLM client not available - cannot generate from context"
+                    "      [WARN] LLM client not available - "
+                    "cannot generate from context"
                 )
                 return None
             response = self.llm.invoke(prompt)
@@ -1010,7 +1013,8 @@ DESCRIPTION:"""
         try:
             if not getattr(self, "llm", None):
                 print(
-                    "      [WARN] LLM client not available - cannot generate from responsibilities"
+                    "      [WARN] LLM client not available - "
+                    "cannot generate from responsibilities"
                 )
                 return None
             response = self.llm.invoke(prompt)
@@ -1036,7 +1040,8 @@ DESCRIPTION:"""
         try:
             if not getattr(self, "llm", None):
                 print(
-                    "      [WARN] LLM client not available - cannot generate minimal description"
+                    "      [WARN] LLM client not available - "
+                    "cannot generate minimal description"
                 )
                 return None
             response = self.llm.invoke(prompt)
@@ -1833,7 +1838,8 @@ def display_parsing_results(result: ParsedDocument, verbose: bool = True):
     print(f"\n[Work Experience]: {len(result.experience)} entries")
     for i, exp in enumerate(result.experience, 1):
         current_marker = " [CURRENT]" if exp.is_current else ""
-        print(f"  {i}. {exp.title or 'N/A'} @ {exp.company or 'N/A'}{current_marker}")
+        line_head = f"  {i}. {exp.title or 'N/A'} @ {exp.company or 'N/A'}"
+        print(f"{line_head}{current_marker}")
         if verbose:
             print(
                 f"     Period: {exp.start_date or 'N/A'} - {exp.end_date or 'Present'}"
@@ -1858,7 +1864,8 @@ def display_parsing_results(result: ParsedDocument, verbose: bool = True):
         for i, skill in enumerate(result.skills, 1):
             source_marker = f"[{skill.source}]"
             print(
-                f"  {i}. {skill.name} {source_marker} (confidence: {skill.confidence:.2f})"
+                f"  {i}. {skill.name} {source_marker} "
+                f"(confidence: {skill.confidence:.2f})"
             )
     else:
         for i, skill in enumerate(result.skills[:5], 1):
@@ -1872,7 +1879,10 @@ def display_parsing_results(result: ParsedDocument, verbose: bool = True):
         level_str = f" ({lang.level})" if lang.level else ""
         cert_str = f" - {lang.certificate}" if lang.certificate else ""
         year_str = f" ({lang.certificate_year})" if lang.certificate_year else ""
-        print(f"  {i}. {lang.name}{level_str}{cert_str}{year_str}")
+        print(
+            f"  {i}. {lang.name}{level_str}{cert_str}"
+            f"{year_str}"
+        )
 
     # Certifications
     print(f"\n[Certifications]: {len(result.certifications)} entries")
@@ -1892,7 +1902,8 @@ def display_parsing_results(result: ParsedDocument, verbose: bool = True):
             print(f"  Locations: {', '.join(result.preferences.locations)}")
         if result.preferences.salary_min and result.preferences.salary_max:
             print(
-                f"  Salary: {result.preferences.salary_min:,}-{result.preferences.salary_max:,} EUR/year"
+                f"  Salary: {result.preferences.salary_min:,}-"
+                f"{result.preferences.salary_max:,} EUR/year"
             )
     else:
         print("  None detected")

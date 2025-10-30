@@ -28,14 +28,16 @@ def display_parsing_results(doc: ParsedDocument) -> str:
         lines.append("\nExperiences:")
         for e in doc.experiences[:6]:
             lines.append(
-                f"  - {e.title} @ {e.company} ({e.start_date or '?'} - {e.end_date or 'present'})"
+                f"  - {e.title} @ {e.company} "
+                f"({e.start_date or '?'} - {e.end_date or 'present'})"
             )
 
     if doc.education:
         lines.append("\nEducation:")
         for ed in doc.education[:4]:
             lines.append(
-                f"  - {ed.degree or ed.institution} ({ed.start_date or '?'} - {ed.end_date or '?'})"
+                f"  - {ed.degree or ed.institution} "
+                f"({ed.start_date or '?'} - {ed.end_date or '?'})"
             )
 
     if doc.skills:
