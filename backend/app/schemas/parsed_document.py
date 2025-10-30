@@ -318,5 +318,5 @@ class ParsedDocument(BaseModel):
                 )
             elif confidence < 0.7:
                 self.add_warning(
-                    f"MEDIUM: Moderate confidence for '{section_key}' ({confidence:.2f})"
+                    f"MEDIUM: Moderate confidence '{section_key}' ({confidence:.2f})"
                 )
