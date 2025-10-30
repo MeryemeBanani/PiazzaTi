@@ -116,7 +116,9 @@ jobs:
       - name: Set image tag and full name
         run: |
           echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_ENV
-          echo "IMAGE_FULL=${REGISTRY}/${BACKEND_IMAGE}:${GITHUB_SHA}" >> $GITHUB_ENV
+          # REGISTRY already includes the repository path (rg.nl-ams.scw.cloud/piazzati/backend)
+          # so the full image name should be REGISTRY:SHA (no extra /${BACKEND_IMAGE}).
+          echo "IMAGE_FULL=${REGISTRY}:${GITHUB_SHA}" >> $GITHUB_ENV
 
       - name: Extract metadata
         id: meta
@@ -135,7 +137,7 @@ jobs:
           context: ./backend
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.REGISTRY }}:${{ github.sha }}
             ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -156,7 +158,9 @@ jobs:
 
           # Recompute IMAGE_FULL here to ensure it's present in this shell
           # (some runners may not immediately expose variables written to $GITHUB_ENV)
-          IMAGE_FULL="${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${GITHUB_SHA}"
+          # REGISTRY already contains the full repository path (rg.nl-ams.scw.cloud/piazzati/backend)
+          # so do NOT append /${BACKEND_IMAGE} here — use REGISTRY:SHA
+          IMAGE_FULL="${{ env.REGISTRY }}:${GITHUB_SHA}"
           export IMAGE_FULL
           echo "[deploy-step] IMAGE_FULL=$IMAGE_FULL"
 
