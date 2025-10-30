@@ -158,7 +158,8 @@ jobs:
           IMAGE_FULL="${{ steps.image.outputs.IMAGE_TO_DEPLOY }}"
           echo "[deploy] IMAGE_FULL=${IMAGE_FULL}"
 
-          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa root@${SCALEWAY_INSTANCE_IP} bash -s -- "$IMAGE_FULL" <<'EOF'
+          # Export registry credentials and flags into the remote shell, then run heredoc
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa root@${SCALEWAY_INSTANCE_IP} "export SCALEWAY_REGISTRY_USERNAME='${SCALEWAY_REGISTRY_USERNAME}' SCALEWAY_REGISTRY_PASSWORD='${SCALEWAY_REGISTRY_PASSWORD}' RUN_PROVISION='${RUN_PROVISION}' OLLAMA_MODEL_NAME='${OLLAMA_MODEL_NAME}' ; bash -s -- '${IMAGE_FULL}'" <<'EOF'
             set -euxo pipefail
             IMAGE_FULL="${1:-}"
             echo "[remote] IMAGE_FULL=$IMAGE_FULL"
