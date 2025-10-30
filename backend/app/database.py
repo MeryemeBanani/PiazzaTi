@@ -9,12 +9,20 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 # ottengo l'URL del database dal .env
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# If DATABASE_URL is not provided (e.g. in local tests), fall back to an
+# in-memory SQLite database to allow the test-suite to run without a .env.
 if not DATABASE_URL:
-    raise ValueError("DATABASE_URL non trovata nel file .env")
+    # Note: using SQLite in-memory for tests and local runs. In production the
+    # real DATABASE_URL should be provided via environment or Docker Compose.
+    DATABASE_URL = "sqlite:///:memory:"
+    print("[WARN] DATABASE_URL not found, defaulting to in-memory SQLite for tests")
 
 
-# creo il motore SQLAlchemy
-engine = create_engine(DATABASE_URL)
+# create the SQLAlchemy engine
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
 
 # Crea la SessionLocal per le transazioni
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

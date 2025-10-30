@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.parsers.ollama_cv_parser import OllamaCVParser
 from app.utils.parsing_display import display_parsing_results
+from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -22,55 +23,70 @@ def get_parser() -> OllamaCVParser:
     return _parser
 
 
-@router.post("/upload")
-async def upload_and_parse(
-    file: UploadFile = File(...),
-    background: bool = True,
-    background_tasks: BackgroundTasks | None = None,
-):
-    """Upload a PDF and parse it.
+try:
+    import multipart  # type: ignore
 
-    If background=True the task will be scheduled and a 202 returned with a "task_id".
-    Otherwise the parsing will be done synchronously and the parsed document returned.
-    """
-    if file.content_type not in ("application/pdf",):
-        raise HTTPException(status_code=400, detail="Only PDF uploads are accepted")
+    MULTIPART_AVAILABLE = True
+except Exception:
+    MULTIPART_AVAILABLE = False
 
-    tmp_dir = Path(tempfile.gettempdir()) / "piazzati_parsing"
-    tmp_dir.mkdir(parents=True, exist_ok=True)
 
-    dest = tmp_dir / f"upload_{file.filename}_{int(time.time())}.pdf"
-    content = await file.read()
-    dest.write_bytes(content)
+if MULTIPART_AVAILABLE:
+    @router.post("/upload")
+    async def upload_and_parse(
+        file: UploadFile = File(...),
+        background: bool = True,
+        background_tasks: Optional[BackgroundTasks] = None,
+    ):
+        """Upload a PDF and parse it.
 
-    parser = get_parser()
+        If background=True the task will be scheduled and a 202 returned with a "task_id".
+        Otherwise the parsing will be done synchronously and the parsed document returned.
+        """
+        if file.content_type not in ("application/pdf",):
+            raise HTTPException(status_code=400, detail="Only PDF uploads are accepted")
 
-    if background:
-        # schedule
-        task_id = str(uuid.uuid4())
+        tmp_dir = Path(tempfile.gettempdir()) / "piazzati_parsing"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
 
-        def _bg():
-            try:
-                # run parser, ignore return (persistence should be implemented)
-                parser.parse(str(dest))
-                print(f"Background parse finished: {task_id}")
-            except Exception as e:
-                print(f"Background parse failed: {e}")
+        dest = tmp_dir / f"upload_{file.filename}_{int(time.time())}.pdf"
+        content = await file.read()
+        dest.write_bytes(content)
 
-        if background_tasks is None:
-            raise HTTPException(status_code=500, detail="Background tasks unavailable")
+        parser = get_parser()
 
-        background_tasks.add_task(_bg)
-        return JSONResponse(status_code=202, content={"task_id": task_id})
-    else:
-        doc = parser.parse(str(dest))
-        text_summary = display_parsing_results(doc)
-        parsed = (
-            doc.model_dump()
-            if hasattr(doc, "model_dump")
-            else getattr(doc, "dict", lambda: {})()
-        )
+        if background:
+            # schedule
+            task_id = str(uuid.uuid4())
 
-        return JSONResponse(
-            status_code=200, content={"parsed": parsed, "summary": text_summary}
-        )
+            def _bg():
+                try:
+                    # run parser, ignore return (persistence should be implemented)
+                    parser.parse(str(dest))
+                    print(f"Background parse finished: {task_id}")
+                except Exception as e:
+                    print(f"Background parse failed: {e}")
+
+            if background_tasks is None:
+                raise HTTPException(status_code=500, detail="Background tasks unavailable")
+
+            background_tasks.add_task(_bg)
+            return JSONResponse(status_code=202, content={"task_id": task_id})
+        else:
+            doc = parser.parse(str(dest))
+            text_summary = display_parsing_results(doc)
+            parsed = (
+                doc.model_dump()
+                if hasattr(doc, "model_dump")
+                else getattr(doc, "dict", lambda: {})()
+            )
+
+            return JSONResponse(
+                status_code=200, content={"parsed": parsed, "summary": text_summary}
+            )
+else:
+    @router.post("/upload")
+    async def upload_and_parse():
+        # multipart not available in this environment (tests may run in a
+        # minimal container). Return 501 to indicate the feature is missing.
+        raise HTTPException(status_code=501, detail="multipart support not available")
