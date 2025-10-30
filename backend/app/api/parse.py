@@ -5,7 +5,6 @@ from pathlib import Path
 
 from app.parsers.ollama_cv_parser import OllamaCVParser
 from app.utils.parsing_display import display_parsing_results
-from typing import Optional
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -37,8 +36,8 @@ if MULTIPART_AVAILABLE:
     @router.post("/upload")
     async def upload_and_parse(
         file: UploadFile = File(...),
-    background: bool = True,
-    background_tasks: BackgroundTasks = None,
+        background: bool = True,
+        background_tasks: BackgroundTasks = None,
     ):
         """Upload a PDF and parse it.
 
