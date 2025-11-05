@@ -1,1 +1,0 @@
-qui verranno caricati i dataset_cv e dataset_jd
