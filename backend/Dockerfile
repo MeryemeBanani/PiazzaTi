@@ -22,6 +22,16 @@ FROM python:3.13-slim
 # Crea utente non-root per sicurezza
 RUN groupadd -r piazzati && useradd -r -g piazzati piazzati
 
+# Install native OCR dependencies in the final image so pdf2image/pytesseract work at runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-ita \
+    libleptonica-dev \
+    libtesseract-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copia virtual environment dal builder
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -44,3 +54,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Comando di avvio ottimizzato per produzione
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--access-log"]
+
