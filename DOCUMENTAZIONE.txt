@@ -63,7 +63,125 @@ Questo file è stato aggiornato per registrare le operazioni eseguite per render
 - (opzionale) Creare un test di integrazione CI che avvii Postgres in container addizionale, esegua il backend nel venv e verifichi `/db-test`.
 
 ---
-Aggiornato: 2025-10-26
+
+
+Stato (2025-10-31)
+------------------
+- CI/CD: Correzioni al workflow GitHub Actions per rendere il deploy remoto più robusto. Il job di build ora esporta il tag immagine canonico (IMAGE_FULL) verso il job di deploy; la scrittura del file remoto `docker-compose.deploy.yml` è stata resa atomica usando una `printf` su file temporaneo per evitare problemi con heredoc indentati.
+- Deploy remoto: Fix e procedure di recovery forniti. Risolto il blocco di `docker compose pull` causato da un override con immagine vuota; istruzioni e one-liner per ricostruire `/opt/piazzati/docker-compose.deploy.yml` e `/var/lib/piazzati/last_deployed_tag` sono state usate per riportare il servizio in stato healthy sul server.
+- Provisioning non-blocking: Lo script di provisioning è ora eseguito in background quando lanciato da CI; il workflow mostra un breve head del log e fa un probe rapido di Ollama prima del check di health.
+- Ollama / LLM: Ollama è attivo sul server e il modello `llama3.1:8b` è caricato, ma l'esecuzione su VM con poche risorse causa elevato uso CPU/RAM e latenze lunghe. Raccomandato: usare swap temporaneo o scalare l'istanza, o usare modelli più piccoli.
+- Parser CV: Identificati `backend/scripts/parse_cli.py` e `backend/app/parsers/ollama_cv_parser.py`. Proposto patch di riduzione parametri LLM (es. OLLAMA_NUM_PREDICT 12000 → 512), limite slice prompt e flag `PARSING_NO_LLM` per esecuzioni rapide senza LLM.
+- Verifiche: L'utente ha eseguito la riparazione remota e il backend ha risposto con /health positivo; le modifiche al workflow sono presenti nel repository e vanno verificate con un run CI completo.
+
+Parsing CV — spiegazione passo-passo (molto dettagliata e lenta)
+-----------------------------------------------------------------
+Questa sezione spiega, con frasi semplici e lente, come funziona il parser dei CV presente nel codice
+(`backend/app/parsers/ollama_cv_parser.py`) e quale oggetto restituisce (`backend/app/schemas/parsed_document.py`).
+
+1) Punto di partenza: il file che vuoi analizzare
+- Hai un file (di solito un PDF) che contiene il curriculum. Il parser prende quel file come input.
+- Il file viene identificato da un percorso: ad esempio `C:\path\to\mio_cv.pdf`.
+
+2) Primo passo: controllo del file e calcolo dell'hash
+- Il parser verifica se il file esiste. Se non esiste, restituisce un errore.
+- Poi legge il file e calcola un hash SHA256. Questo serve per avere un identificatore unico del contenuto.
+
+3) Estrazione del testo (OCR)
+- Il parser prova a trasformare le pagine del PDF in immagini e poi in testo (OCR).
+- Strumenti usati: `pdf2image` per ottenere immagini dalle pagine, e `pytesseract` per leggere il testo dalle immagini.
+- Per velocità e sicurezza il parser prende solo le prime pagine (per default 10). Questo evita di occupare troppa memoria.
+- Se l'OCR fallisce, il parser ritorna una stringa che indica l'errore (ad esempio: "[OCR ERROR: ...]").
+
+4) Pulizia del testo
+- L'OCR spesso introduce caratteri strani (e.g., sequenze tipo "Ã©" al posto di "é").
+- Il parser applica una serie di sostituzioni semplici per riparare questi errori comuni.
+- Questo produce un testo più leggibile e coerente per i passaggi successivi.
+
+5) Riconoscimento del formato (Europass vs standard)
+- Il parser esegue un controllo molto semplice su parole chiave per decidere se il CV è in formato
+  Europass (formato molto strutturato) o se è un CV generico (più libero).
+- Se trova elementi tipici di Europass, usa un parser a campi predefiniti. Altrimenti usa la procedura
+  più generale che può sfruttare un LLM (Large Language Model).
+
+6) Estrazione dati (due strade)
+- Europass: il parser cerca sezioni note (es. "INFORMAZIONI PERSONALI", "ESPERIENZA LAVORATIVA")
+  e legge i valori vicini. Restituisce campi come nome, email, esperienze, istruzione, lingue.
+- Standard (LLM): il parser costruisce un prompt che contiene parte del testo del CV e chiede al modello
+  di restituire un JSON con i campi richiesti. Il parser poi prova a leggere il JSON restituito.
+
+7) Conversione in oggetto Python strutturato
+- Dopo l'estrazione (sia Europass sia LLM) il parser costruisce un oggetto `ParsedDocument`.
+- `ParsedDocument` è un modello definito in `backend/app/schemas/parsed_document.py`.
+- Questo oggetto contiene: informazioni personali, esperienza (lista), formazione, competenze,
+  lingue, certificazioni, testo completo, timestamp di parsing, metadati e campi per qualità/avvisi.
+
+8) Post-processing: miglioramenti e fallback
+- Il parser non si ferma alla prima estrazione. Esegue molte trasformazioni per migliorare i dati:
+  - Se non trova education, prova a estrarla con una regola di fallback.
+  - Se non trova lingue, prova a estrarle con un'altra regola.
+  - Pulisce e normalizza le date.
+  - Filtra le competenze per rimuovere quelle troppo generiche (soft skills) e può aggiungere
+    competenze trovate con euristica nel testo.
+  - Deduplica certificazioni simili.
+  - Se le descrizioni delle esperienze sono assenti o troppo brevi, prova (opzionalmente con LLM)
+    a generare o migliorare una breve descrizione. Questa generazione è fatta con tentativi e
+    con controlli di qualità (minima lunghezza, presenza di verbi d'azione, ecc.).
+
+9) Spans per explainability (XAI)
+- Il parser cerca nel testo le porzioni (span) che corrispondono ai valori estratti: email, telefono,
+  titoli di lavoro, nomi delle aziende, competenze, lingue, ecc.
+- Ogni span è una struttura semplice: posizione iniziale, posizione finale, testo estratto, campo di riferimento
+  e un valore di confidenza. Questi span servono per mostrare da dove il dato è stato estratto nel testo.
+
+10) Calcolo della qualità e avvisi
+- Il parser calcola punteggi di confidenza per sezione (es. personal_info, experience, education, skills, languages).
+- Sulla base di questi punteggi aggiunge avvisi (`warnings`) come "HIGH: No work experience found" o "LOW: No languages found".
+- Viene calcolato un punteggio globale `confidence_score` che riassume la qualità complessiva.
+
+11) Risultato finale: l'oggetto `ParsedDocument`
+- Alla fine ottieni un `ParsedDocument` popolato. Esempio di cosa contiene, in modo semplice:
+  - `personal_info`: { full_name, email, phone, address, city, country }
+  - `experience`: lista di elementi { title, company, start_date, end_date, description }
+  - `education`: lista di studi { degree, institution, graduation_year }
+  - `skills`: lista di competenze { name, source, confidence }
+  - `languages`: lista di lingue { name, proficiency, level }
+  - `all_spans`: lista di span usati per spiegare le estrazioni
+  - `confidence_score`, `section_confidence`, `warnings`, `parsed_at`, `file_sha256`
+
+12) Salvataggio nel database
+- Il backend serializza l'oggetto `ParsedDocument` (in JSON) e lo salva nella colonna JSONB `documents.parsed_json`.
+- Nella base dati è presente anche un indice GIN su `parsed_json` che permette ricerche veloci nei dati parsati.
+
+13) Come usare il parser in modo semplice (esempi operativi)
+- Se vuoi provare localmente, apri PowerShell nella root del progetto e lancia un piccolo script Python.
+  Esempio (PowerShell):
+
+```powershell
+python - <<'PY'
+from backend.app.parsers.ollama_cv_parser import OllamaCVParser, display_parsing_results
+p = OllamaCVParser()
+# Se vuoi evitare chiamate LLM per test veloci:
+p.llm = None
+res = p.parse(r"C:\path\to\mio_cv.pdf")
+display_parsing_results(res, verbose=True)
+PY
+```
+
+14) Consigli pratici, semplici e utili
+- Se il server dove gira l'LLM (Ollama) è lento o instabile, disattiva l'LLM con `p.llm = None` per ottenere
+  comunque l'estrazione basata su regole e fallback.
+- Aggiungi un campo `schema_version` quando salvi il JSON nel DB (es. "0.1"). Questo aiuta a mantenere
+  compatibilità se lo schema dovesse evolvere.
+- Conserva sempre il `full_text` così com'è: gli `all_spans` si riferiscono a quella versione del testo.
+
+Fine della spiegazione lenta e dettagliata sul parser.
+
+Prossimi passi:
+- FATTO: Eseguire un run del workflow (`main`) per validare end-to-end il deploy e controllare i log del job "Deploy to Scaleway Instance".
+- LLM LENTO!! Applicare la patch minima al parser?? (ridurre `num_predict`), e aggiungere `--json/--out` a `parse_cli.py` per usi batch/remoti.
+- VALUTARE: upgrade VM o spostare Ollama su host dedicato (≥16GB RAM) per migliorare latenza inferenza? Spostare Ollama su nuova VM?
+
 
 PiazzaTi - Documentazione Progetto
 ================================
@@ -3191,11 +3309,6 @@ SECURITY INCIDENT PROCEDURE:
 6. Recover systems (from secure backups)
 7. Lessons learned (update security policies)
 
-EMERGENCY CONTACTS:
-• Security Team: security@yourdomain.com
-• Scaleway Support: Enterprise support ticket
-• Database Admin: dba@yourdomain.com
-• Infrastructure Team: infrastructure@yourdomain.com
 
 SECURITY MAINTENANCE:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -3411,9 +3524,5 @@ df -hT
   workflow in caso di errore per rollback automatico.
 - Documentare la policy di backup/retention per le immagini e i volumi Docker.
 
----
-Se vuoi, posso:
- - aggiungere questa sezione anche come file separato `docs/ci-deploy-2025-10-28.md`;
- - o creare dei piccoli script di helper `deploy/update-backend.sh` che eseguano
-   pull + up -d --no-deps --build in modo idempotente sul server.
+
 

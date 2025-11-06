@@ -5,6 +5,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+import os
+import shutil
 
 # LangChain (optional)
 try:
@@ -13,10 +15,18 @@ except Exception:
     Ollama = None  # type: ignore
 
 # Schemas (Pydantic models used by the parser)
-from app.schemas.parsed_document import (Certification, DocumentType,
-                                         Education, Experience, Language,
-                                         ParsedDocument, PersonalInfo, Skill,
-                                         SkillSource, Span)
+from ..schemas.parsed_document import (
+    Certification,
+    DocumentType,
+    Education,
+    Experience,
+    Language,
+    ParsedDocument,
+    PersonalInfo,
+    Skill,
+    SkillSource,
+    Span,
+)
 
 # ========================================================================
 # PARSER CLASS
@@ -41,7 +51,7 @@ class OllamaCVParser:
                     model=model,
                     base_url=base_url,
                     temperature=0.0,
-                    num_predict=12000,
+                    num_predict=512,
                     top_k=10,
                     top_p=0.9,
                     repeat_penalty=1.1,
@@ -1783,24 +1793,99 @@ DESCRIPTION:"""
         return h.hexdigest()
 
     def _extract_text_from_pdf(self, path, max_pages=10):
-        """Extract text from PDF."""
+        """Extract text from PDF with Poppler/Tesseract support.
+
+        This function will:
+        - attempt to resolve a Poppler binary directory from POPPLER_PATH/POPPLER_BIN
+          or by locating `pdftoppm` on PATH;
+        - pass the `poppler_path` to pdf2image.convert_from_path when available;
+        - print debug info on failure to help troubleshooting.
+        """
         try:
             import pytesseract
             from pdf2image import convert_from_path
 
-            images = convert_from_path(path, dpi=200)[:max_pages]
+            # Auto-configure tesseract location for pytesseract:
+            # 1) TESSERACT_CMD env var (preferred)
+            # 2) locate tesseract on PATH via shutil.which
+            tesseract_cmd = os.environ.get("TESSERACT_CMD")
+            if not tesseract_cmd:
+                tesseract_cmd = shutil.which("tesseract") or shutil.which("tesseract.exe")
+            if tesseract_cmd:
+                try:
+                    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+                except Exception:
+                    # Some pytesseract builds use a different import path; try safe set
+                    try:
+                        import pytesseract as _pt
+
+                        _pt.pytesseract.tesseract_cmd = tesseract_cmd
+                    except Exception:
+                        pass
+            # Debug tesseract resolution
+            try:
+                print(f"[OCR DEBUG] resolved tesseract_cmd={tesseract_cmd}")
+            except Exception:
+                pass
+
+            # Resolve poppler (pdftoppm) path. Priority:
+            # 1) POPPLER_PATH or POPPLER_BIN environment variable
+            # 2) locate pdftoppm on PATH
+            poppler_path = os.environ.get("POPPLER_PATH") or os.environ.get("POPPLER_BIN")
+            pdftoppm_path = None
+            if not poppler_path:
+                pdftoppm_path = shutil.which("pdftoppm") or shutil.which("pdftoppm.exe")
+                if pdftoppm_path:
+                    poppler_path = os.path.dirname(pdftoppm_path)
+
+            # If env var points directly to the executable, normalize to directory
+            if poppler_path and os.path.isfile(poppler_path) and poppler_path.lower().endswith(("pdftoppm", "pdftoppm.exe")):
+                poppler_path = os.path.dirname(poppler_path)
+
+            # Debug prints to help troubleshooting in dev
+            try:
+                print(f"[OCR DEBUG] resolved poppler_path={poppler_path}")
+                if not pdftoppm_path:
+                    pdftoppm_path = shutil.which("pdftoppm") or shutil.which("pdftoppm.exe")
+                print(f"[OCR DEBUG] shutil.which('pdftoppm')={pdftoppm_path}")
+                print(f"[OCR DEBUG] pytesseract import attempted")
+            except Exception:
+                pass
+
+            # Try convert; include poppler_path if available
+            try:
+                if poppler_path:
+                    images = convert_from_path(path, dpi=200, poppler_path=poppler_path)[:max_pages]
+                else:
+                    images = convert_from_path(path, dpi=200)[:max_pages]
+            except Exception as e:
+                # Provide richer debug info for the caller
+                import traceback
+
+                tb = traceback.format_exc()
+                debug_msg = (
+                    f"Unable to convert PDF to images. poppler_path={poppler_path}, pdftoppm_path={pdftoppm_path}, error={e}\n{tb}"
+                )
+                print(f"[OCR ERROR] {debug_msg}")
+                return f"[OCR ERROR: {e} | poppler_path={poppler_path} | pdftoppm={pdftoppm_path}]"
+
             text = ""
             for i, img in enumerate(images, 1):
                 print(f"  Page {i}/{len(images)}...")
                 text += pytesseract.image_to_string(img, lang="eng+ita") + "\n\n"
             return text.strip()
         except Exception as e:
+            # Final fallback: return the exception message
+            import traceback
+
+            tb = traceback.format_exc()
+            print(f"[OCR FINAL ERROR] {e}\n{tb}")
             return f"[OCR ERROR: {e}]"
 
 
 print("=" * 80)
 """
-===============================================================================
+                    print(f"[OCR DEBUG] pytesseract import attempted")
 CELLA 6: VALIDATION & DISPLAY FUNCTIONS
 ===============================================================================
 Helper functions per validazione qualità e display risultati.

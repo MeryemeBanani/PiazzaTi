@@ -1,6 +1,6 @@
 from typing import Any, Dict, Tuple
 
-from app.schemas.parsed_document import ParsedDocument
+from ..schemas.parsed_document import ParsedDocument
 
 
 def display_parsing_results(doc: ParsedDocument) -> str:
@@ -24,9 +24,9 @@ def display_parsing_results(doc: ParsedDocument) -> str:
         if getattr(pi, "address", None):
             lines.append(f"  Address: {pi.address}")
 
-    if doc.experiences:
+    if doc.experience:
         lines.append("\nExperiences:")
-        for e in doc.experiences[:6]:
+        for e in doc.experience[:6]:
             lines.append(
                 f"  - {e.title} @ {e.company} "
                 f"({e.start_date or '?'} - {e.end_date or 'present'})"
@@ -56,7 +56,7 @@ def display_parsing_results(doc: ParsedDocument) -> str:
 def compute_extraction_stats(doc: ParsedDocument) -> Dict[str, Any]:
     """Compute simple statistics for parsed document quality."""
     stats = {
-        "n_experiences": len(doc.experiences or []),
+        "n_experiences": len(doc.experience or []),
         "n_education": len(doc.education or []),
         "n_skills": len(doc.skills or []),
         "n_languages": len(doc.languages or []),

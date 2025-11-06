@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -146,9 +146,13 @@ class ParsedDocument(BaseModel):
     document_id: Optional[str] = None
     document_type: DocumentType
     file_sha256: Optional[str] = None
+    user_id: Optional[str] = None  
 
-    #  UPDATED: personal_info with address field
+   
     personal_info: PersonalInfo = Field(default_factory=PersonalInfo)
+
+    # Tags: free-form boolean flags or small taxonomies coming from the parser
+    tags: Dict[str, Any] = Field(default_factory=dict, alias="Tags")
 
     # Content
     summary: Optional[str] = None
@@ -176,6 +180,11 @@ class ParsedDocument(BaseModel):
     warnings: List[str] = Field(default_factory=list)
     all_spans: List[Span] = Field(default_factory=list)
 
+    # NOTE: Pydantic changed config keys in v2 (allow_population_by_field_name -> validate_by_name).
+    # Setting a static `Config` with the old key triggers a UserWarning when Pydantic v2 is
+    # installed. To remain compatible with both v1 and v2 we set the appropriate option at
+    # runtime below.
+
     def add_warning(self, warning: str):
         """Add a warning message."""
         if warning not in self.warnings:
@@ -183,6 +192,8 @@ class ParsedDocument(BaseModel):
 
     def collect_all_spans(self):
         """Collect all spans from nested objects."""
+        # reset to avoid duplicates on repeated calls
+        self.all_spans = []
         for exp in self.experience:
             self.all_spans.extend(exp.spans)
         for edu in self.education:
@@ -320,3 +331,31 @@ class ParsedDocument(BaseModel):
                 self.add_warning(
                     f"MEDIUM: Moderate confidence '{section_key}' ({confidence:.2f})"
                 )
+
+
+# Runtime compatibility shim: set the correct model config depending on Pydantic version.
+try:  # pragma: no cover - runtime shim
+    import pydantic as _pyd
+
+    _ver = getattr(_pyd, "VERSION", None) or getattr(_pyd, "__version__", "1.0.0")
+    _major = int(str(_ver).split(".")[0])
+    if _major >= 2:
+        # Pydantic v2: use model_config / validate_by_name
+        # model_config may already exist (dataclasses / earlier settings); ensure it's a dict
+        existing = getattr(ParsedDocument, "model_config", {}) or {}
+        if isinstance(existing, dict):
+            existing.update({"validate_by_name": True})
+            ParsedDocument.model_config = existing
+    else:
+        # Pydantic v1: attach Config.allow_population_by_field_name
+        cfg = getattr(ParsedDocument, "Config", object())
+        try:
+            setattr(cfg, "allow_population_by_field_name", True)
+            ParsedDocument.Config = cfg
+        except Exception:
+            # best-effort: ignore if we cannot set it
+            pass
+except Exception:  # pragma: no cover - defensive
+    pass
+
+   

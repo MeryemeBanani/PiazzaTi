@@ -1,7 +1,10 @@
 import os
 
-from app.api.parse import router as parse_router
-from app.database import get_db
+# Use relative imports so this module works when loaded as
+# `backend.app.main:app` (avoids relying on a top-level `app` package
+# being on sys.path during development/runtime).
+from .api.parse import router as parse_router
+from .database import get_db
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles

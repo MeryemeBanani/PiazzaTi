@@ -3,17 +3,20 @@ import time
 import uuid
 from pathlib import Path
 
-from app.parsers.ollama_cv_parser import OllamaCVParser
-from app.utils.parsing_display import display_parsing_results
+from ..parsers.ollama_cv_parser import OllamaCVParser
+from ..utils.parsing_display import display_parsing_results
 from fastapi import (
     APIRouter,
     BackgroundTasks,
     File,
+    Form,
     HTTPException,
     UploadFile,
 )
+import json
 import importlib.util
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 
 router = APIRouter(prefix="/parse", tags=["parse"])
 
@@ -38,6 +41,8 @@ if MULTIPART_AVAILABLE:
         file: UploadFile = File(...),
         background: bool = True,
         background_tasks: BackgroundTasks = None,
+        user_id: str | None = Form(None),
+        Tags: str | None = Form(None),
     ):
         """Upload a PDF and parse it.
 
@@ -63,9 +68,23 @@ if MULTIPART_AVAILABLE:
 
             def _bg():
                 try:
-                    # run parser, ignore return (persistence should be implemented)
-                    parser.parse(str(dest))
-                    print(f"Background parse finished: {task_id}")
+                    # run parser
+                    doc = parser.parse(str(dest))
+                    # attach optional metadata if provided
+                    try:
+                        if user_id:
+                            doc.user_id = user_id
+                        if Tags:
+                            try:
+                                doc.tags = json.loads(Tags)
+                            except Exception:
+                                # fallback: ignore malformed tags
+                                pass
+                    except Exception:
+                        pass
+
+                    # persistence should be implemented here (DB save)
+                    print(f"Background parse finished: {task_id} (user_id={getattr(doc, 'user_id', None)})")
                 except Exception as e:
                     print(f"Background parse failed: {e}")
 
@@ -78,17 +97,52 @@ if MULTIPART_AVAILABLE:
             background_tasks.add_task(_bg)
             return JSONResponse(status_code=202, content={"task_id": task_id})
         else:
-            doc = parser.parse(str(dest))
-            text_summary = display_parsing_results(doc)
-            parsed = (
-                doc.model_dump()
-                if hasattr(doc, "model_dump")
-                else getattr(doc, "dict", lambda: {})()
-            )
+            # Synchronous parsing path. Wrap in try/except to return
+            # helpful traceback during local development.
+            try:
+                doc = parser.parse(str(dest))
 
-            return JSONResponse(
-                status_code=200, content={"parsed": parsed, "summary": text_summary}
-            )
+                # attach optional metadata coming from the form
+                if user_id:
+                    try:
+                        doc.user_id = user_id
+                    except Exception:
+                        pass
+
+                if Tags:
+                    try:
+                        parsed_tags = json.loads(Tags)
+                        if isinstance(parsed_tags, dict):
+                            doc.tags = parsed_tags
+                    except Exception:
+                        # ignore malformed tags
+                        pass
+
+                text_summary = display_parsing_results(doc)
+                parsed = (
+                    doc.model_dump()
+                    if hasattr(doc, "model_dump")
+                    else getattr(doc, "dict", lambda: {})()
+                )
+
+                # Ensure all values (e.g. datetimes) are JSON-serializable
+                return JSONResponse(
+                    status_code=200,
+                    content={"parsed": jsonable_encoder(parsed), "summary": text_summary},
+                )
+            except Exception as e:
+                # Development helper: include traceback in response body so the
+                # frontend / curl can show the error without opening server logs.
+                import traceback as _tb
+
+                tb = _tb.format_exc()
+                # Log to server console as well
+                print("Synchronous parse failed:", str(e))
+                print(tb)
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": str(e), "traceback": tb},
+                )
 else:
     @router.post("/upload")
     async def upload_and_parse():
