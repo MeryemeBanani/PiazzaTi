@@ -213,6 +213,24 @@ jobs:
               mv /tmp/home.html /var/www/piazzati/home.html || true
             fi
 
+            # Try to validate nginx config and reload so the new conf takes effect immediately
+            if command -v nginx >/dev/null 2>&1; then
+              echo "[remote] testing nginx configuration"
+              nginx -t || true
+              # Reload nginx using systemctl if available, otherwise fall back to nginx -s reload
+              if command -v systemctl >/dev/null 2>&1; then
+                systemctl reload nginx || nginx -s reload || true
+              else
+                nginx -s reload || true
+              fi
+
+              # Print the installed conf and the target web directory for diagnostics
+              echo "[remote] installed nginx conf: /etc/nginx/conf.d/piazzati_parse_grafana_home.conf"
+              cat /etc/nginx/conf.d/piazzati_parse_grafana_home.conf || true
+              echo "[remote] /var/www/piazzati listing"
+              ls -la /var/www/piazzati || true
+            fi
+
             # Create compose override atomically
             tmpfile=$(mktemp /tmp/docker-compose.deploy.yml.XXXX)
             printf '%s\n' "services:" "  piazzati-backend:" "    image: ${IMAGE_FULL}" > "$tmpfile"
