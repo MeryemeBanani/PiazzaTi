@@ -163,6 +163,8 @@ jobs:
               git clone https://github.com/MeryemeBanani/PiazzaTi.git ${REPO_DIR}
             fi
             cd ${REPO_DIR}
+            # Ensure origin uses HTTPS so remote shell can fetch without an SSH key
+            git remote set-url origin https://github.com/MeryemeBanani/PiazzaTi.git || true
             git fetch origin main
             git reset --hard origin/main
 
