@@ -132,8 +132,8 @@ jobs:
       - name: Prepare SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_piazzati
+          chmod 600 ~/.ssh/id_piazzati
           ssh-keyscan -H ${{ secrets.SCALEWAY_INSTANCE_IP }} >> ~/.ssh/known_hosts
 
       - name: Determine IMAGE to deploy
@@ -159,7 +159,7 @@ jobs:
           echo "[deploy] IMAGE_FULL=${IMAGE_FULL}"
 
           # Export registry credentials and flags into the remote shell, then run heredoc
-          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa root@${SCALEWAY_INSTANCE_IP} "export SCALEWAY_REGISTRY_USERNAME='${SCALEWAY_REGISTRY_USERNAME}' SCALEWAY_REGISTRY_PASSWORD='${SCALEWAY_REGISTRY_PASSWORD}' RUN_PROVISION='${RUN_PROVISION}' OLLAMA_MODEL_NAME='${OLLAMA_MODEL_NAME}' ; bash -s -- '${IMAGE_FULL}'" <<'EOF'
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -i ~/.ssh/id_piazzati root@${SCALEWAY_INSTANCE_IP} "export SCALEWAY_REGISTRY_USERNAME='${SCALEWAY_REGISTRY_USERNAME}' SCALEWAY_REGISTRY_PASSWORD='${SCALEWAY_REGISTRY_PASSWORD}' RUN_PROVISION='${RUN_PROVISION}' OLLAMA_MODEL_NAME='${OLLAMA_MODEL_NAME}' ; bash -s -- '${IMAGE_FULL}'" <<'EOF'
             set -euxo pipefail
             IMAGE_FULL="${1:-}"
             echo "[remote] IMAGE_FULL=$IMAGE_FULL"
