@@ -136,6 +136,12 @@ jobs:
           chmod 600 ~/.ssh/id_piazzati
           ssh-keyscan -H ${{ secrets.SCALEWAY_INSTANCE_IP }} >> ~/.ssh/known_hosts
 
+      - name: Debug: print deploy key fingerprint (temporary)
+        run: |
+          # print public key derived from the private key and its fingerprint
+          ssh-keygen -y -f ~/.ssh/id_piazzati | ssh-keygen -lf - || true
+          echo "(End of fingerprint)"
+
       - name: Determine IMAGE to deploy
         id: image
         run: |
