@@ -154,7 +154,9 @@ services:
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
       - GF_SERVER_DOMAIN=${GRAFANA_DOMAIN:-localhost}
-      - GF_SERVER_ROOT_URL=https://${GRAFANA_DOMAIN:-localhost}/
+      # Serve Grafana from subpath /grafana/ when proxied via nginx
+      - GF_SERVER_ROOT_URL=https://${GRAFANA_DOMAIN:-localhost}/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
       - GF_DATABASE_TYPE=postgres
       - GF_DATABASE_HOST=${GRAFANA_DB_HOST}
       - GF_DATABASE_NAME=${GRAFANA_DB_NAME}

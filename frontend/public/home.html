@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Piazzati — Home</title>
+    <style>
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;margin:0;background:#f6f8fa;color:#0b0f13;display:flex;align-items:center;justify-content:center;height:100vh}
+      .card{background:white;padding:32px;border-radius:10px;box-shadow:0 6px 24px rgba(11,15,19,.08);max-width:520px;width:90%;text-align:center}
+      h1{margin:0 0 8px;font-size:24px}
+      p{margin:0 0 18px;color:#556}
+      .buttons{display:flex;gap:12px;justify-content:center}
+      a.button{display:inline-block;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:600;color:white;background:#2563eb}
+      a.button.alt{background:#10b981}
+      footer{margin-top:16px;font-size:13px;color:#889}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Piazzati — Pannello</h1>
+      <p>Scegli una destinazione:</p>
+      <div class="buttons">
+        <!-- Link to Grafana route. Prefer /grafana which the nginx proxy will forward to :3000 -->
+        <a class="button" href="/grafana/" target="_blank" rel="noopener">Apri Grafana</a>
+        <!-- Link to the front-end upload SPA mounted under /parse/ -->
+        <a class="button alt" href="/parse/">Vai alla pagina di upload CV</a>
+      </div>
+      <footer>
+        Se Grafana è esposto su :3000 direttamente puoi anche usare http://&lt;ip&gt;:3000
+      </footer>
+    </div>
+  </body>
+</html>

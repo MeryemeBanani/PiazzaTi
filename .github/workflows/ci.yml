@@ -165,7 +165,6 @@ jobs:
           # Upload frontend and nginx config (use the ssh key prepared earlier)
           scp -i ~/.ssh/id_piazzati frontend_dist.tgz root@${SCALEWAY_INSTANCE_IP}:/tmp/frontend_dist.tgz || true
           scp -i ~/.ssh/id_piazzati deploy/nginx_piazzati_parse_grafana_home.conf root@${SCALEWAY_INSTANCE_IP}:/tmp/piazzati_nginx.conf || true
-          scp -i ~/.ssh/id_piazzati deploy/home.html root@${SCALEWAY_INSTANCE_IP}:/tmp/home.html || true
 
           # Export registry credentials and flags into the remote shell, then run heredoc
           ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -i ~/.ssh/id_piazzati root@${SCALEWAY_INSTANCE_IP} "export SCALEWAY_REGISTRY_USERNAME='${SCALEWAY_REGISTRY_USERNAME}' SCALEWAY_REGISTRY_PASSWORD='${SCALEWAY_REGISTRY_PASSWORD}' RUN_PROVISION='${RUN_PROVISION}' OLLAMA_MODEL_NAME='${OLLAMA_MODEL_NAME}' ; bash -s -- '${IMAGE_FULL}'" <<'EOF'
