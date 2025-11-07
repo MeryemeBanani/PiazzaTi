@@ -31,6 +31,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    
 
   # PostgreSQL Exporter per metriche database
   postgres-exporter:
