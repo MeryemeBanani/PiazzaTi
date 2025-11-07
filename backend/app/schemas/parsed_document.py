@@ -91,6 +91,9 @@ class Education(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
+    # Optional dates: some parsers provide start/end, others only graduation_year
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
     graduation_year: Optional[int] = None
     gpa: Optional[str] = None
     spans: List[Span] = Field(default_factory=list)
