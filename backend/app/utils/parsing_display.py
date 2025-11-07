@@ -35,10 +35,22 @@ def display_parsing_results(doc: ParsedDocument) -> str:
     if doc.education:
         lines.append("\nEducation:")
         for ed in doc.education[:4]:
-            lines.append(
-                f"  - {ed.degree or ed.institution} "
-                f"({ed.start_date or '?'} - {ed.end_date or '?'})"
-            )
+            # Education schema may use graduation_year instead of start_date/end_date.
+            # Use getattr with a default to avoid AttributeError for missing attrs.
+            start = getattr(ed, "start_date", None)
+            end = getattr(ed, "end_date", None)
+            grad = getattr(ed, "graduation_year", None)
+
+            if start or end:
+                start_label = start or "?"
+                end_label = end or "?"
+                date_str = f"{start_label} - {end_label}"
+            elif grad:
+                date_str = str(grad)
+            else:
+                date_str = "?"
+
+            lines.append(f"  - {ed.degree or ed.institution} ({date_str})")
 
     if doc.skills:
         lines.append("\nSkills:")
