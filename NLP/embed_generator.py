@@ -174,6 +174,7 @@ def process_cv_dataset() -> Tuple[pd.DataFrame, Dict]:
     df['model_name'] = MODEL_NAME
     df['model_dim'] = MODEL_DIM
     df['created_at'] = datetime.now().isoformat()
+    df['document_type'] = 'cv'  
 
     stats = compute_drift_metrics(embeddings)
     stats['count'] = len(df)
@@ -209,6 +210,7 @@ def process_jd_dataset() -> Tuple[pd.DataFrame, Dict]:
     df['model_name'] = MODEL_NAME
     df['model_dim'] = MODEL_DIM
     df['created_at'] = datetime.now().isoformat()
+    df['document_type'] = 'jd'  
 
     stats = compute_drift_metrics(embeddings)
     stats['count'] = len(df)
@@ -299,6 +301,7 @@ def main():
 
         cv_columns = [
             'user_id',
+            'document_type',  # ← AGGIUNTO
             'embedding_vector',
             'text_content',
             'model_name',
@@ -310,6 +313,7 @@ def main():
 
         jd_columns = [
             'jd_id',
+            'document_type',  
             'embedding_vector',
             'text_content',
             'model_name',
