@@ -1,0 +1,16 @@
+This directory contains an archive snapshot of the previous `deploy/` contents.
+
+Files archived from original `deploy/` on 2025-11-07:
+- backup-before-server-sync/ (moved out of deploy)
+- home.html
+- nginx_piazzati_parse_grafana_home.conf
+- piazzati-backend.service
+- README_DEPLOY.md
+- restart_backend.sh
+- systemd/
+
+Reason: `deploy/` contained mixed legacy scripts, backups and conf copies. The
+recommended production nginx config was moved to `frontend/nginx/nginx.prod.conf`.
+
+If you need any of the archived files restored, retrieve them from the git history or
+from the original `deploy/` folder before this cleanup commit.

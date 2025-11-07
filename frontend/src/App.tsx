@@ -36,9 +36,9 @@ export default function App() {
     setResult(null)
 
     try {
-      // Assumiamo che il backend esponga l'endpoint /api/parse
+      // Assumiamo che il backend esponga l'endpoint /parse/upload
       // Call the backend upload endpoint. Use background=false to request synchronous parse
-      const res = await fetch('/api/parse/upload?background=false', {
+      const res = await fetch('/parse/upload?background=false', {
         method: 'POST',
         body: fd
       })
@@ -117,7 +117,7 @@ export default function App() {
 
             <div className="mt-4 text-sm text-gray-600">
               <p>
-                Il parser è lato backend. Questo form invia il PDF a <code>/api/parse</code>.
+                Il parser è lato backend. Questo form invia il PDF a <code>/parse/upload</code>.
               </p>
               <p>
                 Se stai sviluppando localmente con Vite, configura un proxy in <code>vite.config.ts</code>
