@@ -5,14 +5,14 @@ if TYPE_CHECKING:
 
 import datetime
 import uuid
-from typing import Any, Optional
+from typing import List, Optional
 
 from sqlalchemy import (Boolean, CheckConstraint, DateTime,
                         ForeignKeyConstraint, Index, Integer,
                         PrimaryKeyConstraint, Text, UniqueConstraint, Uuid,
                         text)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql.sqltypes import NullType
+from pgvector.sqlalchemy import Vector
 
 from .base import Base
 
@@ -38,8 +38,8 @@ class Embedding(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     document_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
-    embedding: Mapped[Optional[Any]] = mapped_column(
-        NullType, comment=("Embedding SBERT MiniLM-L12-v2")
+    embedding: Mapped[Optional[List[float]]] = mapped_column(
+        Vector(1536), comment=("Embedding SBERT MiniLM-L12-v2")
     )
     model_name: Mapped[Optional[str]] = mapped_column(
         Text, server_default=text("'sentence-transformers/MiniLM-L12-v2'::text")

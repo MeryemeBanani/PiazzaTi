@@ -6,13 +6,13 @@ if TYPE_CHECKING:
 
 import datetime
 import uuid
-from typing import Any, Optional
+from typing import List, Optional
 
 from sqlalchemy import (Boolean, DateTime, Double, Enum, ForeignKeyConstraint,
                         Index, Integer, PrimaryKeyConstraint, String, Uuid,
                         text)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql.sqltypes import NullType
+from pgvector.sqlalchemy import Vector
 
 from .base import Base
 
@@ -31,8 +31,8 @@ class Search(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     user_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     query_text: Mapped[Optional[str]] = mapped_column(String)
-    query_vector: Mapped[Optional[Any]] = mapped_column(
-        NullType, comment=("Embedding semantico della query")
+    query_vector: Mapped[Optional[List[float]]] = mapped_column(
+        Vector(1536), comment=("Embedding semantico della query")
     )
     type: Mapped[Optional[str]] = mapped_column(
         Enum("cv_search", "jd_search", name="search_type")

@@ -37,30 +37,40 @@ class OllamaCVParser:
     """Parser v1.7.4 with enhanced description generation."""
 
     def __init__(
-        self, model: str = "llama3.1:8b", base_url: str = "http://localhost:11434"
+        self, model: str = "llama3.1:8b", base_url: str = None
     ):
+        import os
+        
         self.model = model
-        self.base_url = base_url
+        # Use environment variable OLLAMA_BASE_URL if available, fallback to parameter or default
+        self.base_url = (
+            base_url or 
+            os.getenv("OLLAMA_BASE_URL") or 
+            "http://localhost:11434"
+        )
 
         print("Initializing parser v1.7.4 FINAL...")
+        print(f"  Using Ollama base_url: {self.base_url}")
 
         # Instantiate LLM client if available;
         if Ollama is not None:
             try:
                 self.llm = Ollama(
                     model=model,
-                    base_url=base_url,
+                    base_url=self.base_url,  # Use self.base_url instead of parameter
                     temperature=0.0,
                     num_predict=512,
                     top_k=10,
                     top_p=0.9,
                     repeat_penalty=1.1,
                 )
+                print(f"  ✅ LLM client initialized successfully (model: {model})")
             except Exception as e:
                 # Fail gracefully: log and keep llm unset
-                print(f"[WARNING] Failed to initialize Ollama client: {e}")
+                print(f"  ❌ Failed to initialize Ollama client: {e}")
                 self.llm = None
         else:
+            print(f"  ❌ Ollama library not available")
             self.llm = None
 
         self._init_language_database()
@@ -575,7 +585,7 @@ class OllamaCVParser:
 
         try:
             if not getattr(self, "llm", None):
-                print("      [WARN] LLM client not available - skipping LLM extraction")
+                print(f"      [WARN] LLM client not available (base_url: {getattr(self, 'base_url', 'unknown')}) - skipping LLM extraction")
                 return self._create_empty_document()
             response = self.llm.invoke(prompt)
             data = self._parse_json_response(response)

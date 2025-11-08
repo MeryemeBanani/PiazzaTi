@@ -4,6 +4,7 @@ import os
 # `backend.app.main:app` (avoids relying on a top-level `app` package
 # being on sys.path during development/runtime).
 from .api.parse import router as parse_router
+from .api.embeddings import router as embeddings_router
 from .database import get_db
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -43,6 +44,9 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Register parsing API router (PDF -> parsed JSON)
 app.include_router(parse_router)
+
+# Register embeddings API router (CSV processing & similarity search)
+app.include_router(embeddings_router, prefix="/api")
 
 # Instrument FastAPI automatically (per tracciare le richieste)
 FastAPIInstrumentor.instrument_app(app)

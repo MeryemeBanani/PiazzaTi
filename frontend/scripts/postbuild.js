@@ -6,7 +6,12 @@ function copyIndexForRoutes(distDir) {
   const index = path.join(distDir, 'index.html');
   if (!fs.existsSync(index)) {
     console.error('build output index.html not found in', distDir);
-    process.exit(1);
+    const errMsg = `build output index.html not found in ${distDir}`;
+    // avoid referencing `process` directly in environments where it's undefined
+    if (typeof globalThis !== 'undefined' && typeof globalThis.process !== 'undefined' && typeof globalThis.process.exit === 'function') {
+        globalThis.process.exit(1);
+    }
+    throw new Error(errMsg);
   }
 
   // ensure /parse/index.html exists

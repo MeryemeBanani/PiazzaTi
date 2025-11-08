@@ -32,6 +32,64 @@ def get_parser() -> OllamaCVParser:
     return _parser
 
 
+@router.get("/status")
+async def get_parser_status():
+    """Check parser and LLM status."""
+    parser = get_parser()
+    
+    llm_status = {
+        "llm_available": hasattr(parser, 'llm') and parser.llm is not None,
+        "base_url": getattr(parser, 'base_url', 'unknown'),
+        "model": getattr(parser, 'model', 'unknown')
+    }
+    
+    # Test Ollama connectivity
+    try:
+        from ..ollama_integration import check_ollama_api
+        ollama_reachable = check_ollama_api(timeout=3)
+        llm_status["ollama_reachable"] = ollama_reachable
+    except Exception as e:
+        llm_status["ollama_reachable"] = False
+        llm_status["ollama_error"] = str(e)
+    
+    return {
+        "parser_initialized": parser is not None,
+        "parser_version": "v1.7.4 FINAL",
+        "llm_status": llm_status
+    }
+
+
+@router.post("/reinitialize-llm")
+async def reinitialize_llm(base_url: str = "http://host.docker.internal:11434"):
+    """Reinitialize LLM with new base_url."""
+    global _parser
+    
+    try:
+        # Create new parser instance with updated base_url
+        _parser = OllamaCVParser(base_url=base_url)
+        
+        status = {
+            "success": True,
+            "llm_available": hasattr(_parser, 'llm') and _parser.llm is not None,
+            "base_url": _parser.base_url,
+            "model": _parser.model
+        }
+        
+        if status["llm_available"]:
+            status["message"] = "LLM successfully reinitialized and connected!"
+        else:
+            status["message"] = "Parser reinitialized but LLM connection failed"
+            
+        return status
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to reinitialize LLM"
+        }
+
+
 MULTIPART_AVAILABLE = importlib.util.find_spec("multipart") is not None
 
 
