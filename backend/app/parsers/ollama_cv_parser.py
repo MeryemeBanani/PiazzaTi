@@ -38,7 +38,7 @@ class OllamaCVParser:
     """Parser v1.7.4 with enhanced description generation."""
 
     def __init__(
-        self, model: str = "llama3.1:8b", base_url: str = None
+        self, model: str = "llama3.2:3b", base_url: str = None
     ):
         import os
         
