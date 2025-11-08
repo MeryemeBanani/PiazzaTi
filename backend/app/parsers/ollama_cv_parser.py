@@ -11,7 +11,7 @@ import requests
 
 # LangChain (optional)
 try:
-    from langchain_community.llms import Ollama
+    from langchain_ollama import OllamaLLM as Ollama
 except Exception:
     Ollama = None  # type: ignore
 
@@ -653,55 +653,16 @@ class OllamaCVParser:
             return self._create_empty_document()
 
     def _get_robust_prompt(self, text: str) -> str:
-        """Robust prompt for standard CVs."""
-        prompt_template = """Extract CV data into VALID JSON.
+        """Optimized prompt for faster CV parsing."""
+        prompt_template = """Extract CV data as JSON:
 
-RULES:
-1. Output ONLY valid JSON
-2. Extract ALL fields
-3. Languages: ONLY language names
-4. Skills: Technical skills only
-5. Certifications: Full names
+{"personal_info":{"full_name":"","email":"","phone":"","city":""},"experience":[{"title":"","company":"","start_date":"","end_date":"","responsibilities":[]}],"education":[{"degree":"","institution":"","graduation_year":null}],"skills":[{"name":""}],"languages":[{"name":"","proficiency":""}]}
 
-SCHEMA:
-{
-    "personal_info": {
-        "full_name": "Name",
-        "email": "email",
-        "phone": "phone",
-        "address": "Via X",
-        "city": "City",
-        "country": "Country",
-    },
-    "summary": "Professional summary",
-    "experience": [
-        {
-            "title": "Job",
-            "company": "Company",
-            "city": "City",
-            "start_date": "YYYY",
-            "end_date": "YYYY",
-            "responsibilities": ["r1"],
-        }
-    ],
-    "education": [
-        {
-            "degree": "Degree",
-            "institution": "Institution",
-            "graduation_year": 2020,
-            "gpa": "110/110",
-        }
-    ],
-    "skills": [{"name": "Python"}],
-    "languages": [{"name": "Italiano", "proficiency": "Madrelingua"}],
-    "certifications": [{"name": "Cert", "date_obtained": "2023"}],
-}
-
-CV:
+CV TEXT:
 {text}
 
 JSON:"""
-        return prompt_template.replace("{text}", text)
+        return prompt_template.replace("{text}", text[:4000])  # Reduced text size for faster processing
 
     def _parse_json_response(self, response: str) -> ParsedDocument:
         """Parse JSON response."""

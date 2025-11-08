@@ -24,6 +24,9 @@ router = APIRouter(prefix="/parse", tags=["parse"])
 # Lazy singleton parser to avoid re-init per request
 _parser: OllamaCVParser = None
 
+# In-memory storage for task results (in production, use Redis/DB)
+_task_results = {}
+
 
 def get_parser() -> OllamaCVParser:
     global _parser
@@ -90,6 +93,25 @@ async def reinitialize_llm(base_url: str = "http://host.docker.internal:11434"):
         }
 
 
+@router.get("/task/{task_id}")
+async def get_task_status(task_id: str):
+    """Get the status of a background parsing task."""
+    if task_id not in _task_results:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    result = _task_results[task_id].copy()
+    
+    # Add elapsed time info
+    if "started_at" in result:
+        elapsed = time.time() - result["started_at"]
+        result["elapsed_seconds"] = round(elapsed, 1)
+        
+        if result["status"] == "processing":
+            result["estimated_remaining"] = max(0, 180 - elapsed)  # Estimate 3 minutes total
+    
+    return result
+
+
 MULTIPART_AVAILABLE = importlib.util.find_spec("multipart") is not None
 
 
@@ -126,6 +148,13 @@ if MULTIPART_AVAILABLE:
 
             def _bg():
                 try:
+                    # Store initial status
+                    _task_results[task_id] = {
+                        "status": "processing",
+                        "started_at": time.time(),
+                        "filename": file.filename
+                    }
+                    
                     # run parser
                     doc = parser.parse(str(dest))
                     # attach optional metadata if provided
@@ -141,10 +170,35 @@ if MULTIPART_AVAILABLE:
                     except Exception:
                         pass
 
-                    # persistence should be implemented here (DB save)
+                    # Store successful result
+                    parsed_data = (
+                        doc.model_dump()
+                        if hasattr(doc, "model_dump")
+                        else getattr(doc, "dict", lambda: {})()
+                    )
+                    
+                    _task_results[task_id] = {
+                        "status": "completed",
+                        "started_at": _task_results[task_id]["started_at"],
+                        "completed_at": time.time(),
+                        "filename": file.filename,
+                        "result": jsonable_encoder(parsed_data),
+                        "summary": display_parsing_results(doc)
+                    }
+                    
                     print(f"Background parse finished: {task_id} (user_id={getattr(doc, 'user_id', None)})")
                 except Exception as e:
-                    print(f"Background parse failed: {e}")
+                    # Store error result
+                    import traceback as _tb
+                    _task_results[task_id] = {
+                        "status": "failed",
+                        "started_at": _task_results.get(task_id, {}).get("started_at", time.time()),
+                        "failed_at": time.time(),
+                        "filename": file.filename,
+                        "error": str(e),
+                        "traceback": _tb.format_exc()
+                    }
+                    print(f"Background parse failed: {task_id} - {e}")
 
             if background_tasks is None:
                 raise HTTPException(
