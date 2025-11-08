@@ -16,11 +16,20 @@ from pathlib import Path
 import time
 from typing import Dict, Any
 
-from backend.app.services.csv_embedding_processor import (
-    CSVEmbeddingProcessor, 
-    process_colleague_csv,
-    watch_and_process_csv_directory
-)
+try:
+    # Try container path first (when running inside Docker)
+    from app.services.csv_embedding_processor import (
+        CSVEmbeddingProcessor, 
+        process_colleague_csv,
+        watch_and_process_csv_directory
+    )
+except ImportError:
+    # Fallback to host path (when running on host)
+    from backend.app.services.csv_embedding_processor import (
+        CSVEmbeddingProcessor, 
+        process_colleague_csv,
+        watch_and_process_csv_directory
+    )
 
 
 def setup_data_directories():
