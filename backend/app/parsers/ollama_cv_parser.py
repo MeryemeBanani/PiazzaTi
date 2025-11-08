@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Optional
 import os
 import shutil
+import requests
 
 # LangChain (optional)
 try:
@@ -78,6 +79,61 @@ class OllamaCVParser:
         self._init_skill_keywords()
 
         print("SUCCESS: Parser v1.7.4 FINAL ready")
+
+    def _call_llm(self, prompt: str, timeout: int = 600, retries: int = 2) -> str:
+        """Call Ollama directly with a configurable timeout and simple retries.
+
+        This avoids relying on the underlying client library's default timeout
+        and gives the server more time for long completions.
+        Returns the raw text response from the model.
+        """
+        url = f"{self.base_url.rstrip('/')}/api/generate"
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+        }
+
+        last_err = None
+        for attempt in range(1, retries + 1):
+            try:
+                resp = requests.post(url, json=payload, timeout=timeout)
+                if resp.status_code != 200:
+                    last_err = Exception(f"Ollama returned {resp.status_code}: {resp.text}")
+                    # small backoff
+                    if attempt < retries:
+                        import time
+
+                        time.sleep(1 * attempt)
+                    continue
+
+                result = resp.json()
+                # Ollama responses can vary; try common keys
+                if isinstance(result, dict):
+                    if "response" in result:
+                        return result.get("response") or ""
+                    # older/newer formats
+                    if "results" in result and isinstance(result["results"], list) and len(result["results"])>0:
+                        # try to extract text from first result
+                        first = result["results"][0]
+                        if isinstance(first, dict) and "response" in first:
+                            return first.get("response") or ""
+                        # fallback to stringifying
+                        return json.dumps(result)
+
+                # fallback: return raw text
+                return resp.text
+
+            except Exception as e:
+                last_err = e
+                if attempt < retries:
+                    import time
+
+                    time.sleep(1 * attempt)
+                else:
+                    break
+
+        raise last_err or Exception("Unknown Ollama error")
 
     def _init_language_database(self):
         """Language database."""
@@ -587,7 +643,8 @@ class OllamaCVParser:
             if not getattr(self, "llm", None):
                 print(f"      [WARN] LLM client not available (base_url: {getattr(self, 'base_url', 'unknown')}) - skipping LLM extraction")
                 return self._create_empty_document()
-            response = self.llm.invoke(prompt)
+            # Use direct HTTP call with extended timeout to avoid client-side timeouts
+            response = self._call_llm(prompt, timeout=600, retries=2)
             data = self._parse_json_response(response)
             print("      ✓ Success")
             return data
@@ -1023,7 +1080,7 @@ DESCRIPTION:"""
                     "cannot generate from context"
                 )
                 return None
-            response = self.llm.invoke(prompt)
+            response = self._call_llm(prompt, timeout=300, retries=2)
             return self._clean_llm_description(response)
         except Exception:
             return None
@@ -1059,7 +1116,7 @@ DESCRIPTION:"""
                     "cannot generate from responsibilities"
                 )
                 return None
-            response = self.llm.invoke(prompt)
+            response = self._call_llm(prompt, timeout=300, retries=2)
             return self._clean_llm_description(response)
         except Exception:
             return None
@@ -1087,7 +1144,7 @@ DESCRIPTION:"""
                     "cannot generate minimal description"
                 )
                 return None
-            response = self.llm.invoke(prompt)
+            response = self._call_llm(prompt, timeout=120, retries=2)
             return self._clean_llm_description(response)
         except Exception:
             return None
