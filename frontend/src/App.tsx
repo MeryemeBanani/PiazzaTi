@@ -28,9 +28,13 @@ export default function App() {
     
     const poll = async () => {
       try {
+        console.log(`🔍 Checking task status for: ${id}`)
         const res = await fetch(`/parse/task/${id}`)
+        console.log(`📡 Response status: ${res.status}`)
         if (!res.ok) {
-          throw new Error(`Failed to check task status: ${res.status}`)
+          const errorText = await res.text()
+          console.error(`❌ Task check failed: ${res.status} - ${errorText}`)
+          throw new Error(`Failed to check task status: ${res.status} - ${errorText}`)
         }
         
         const taskData = await res.json()
