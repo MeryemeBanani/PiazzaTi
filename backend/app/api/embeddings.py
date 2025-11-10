@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 import numpy as np
 
 from ..database import get_db as get_session
-from ..services.embedding_service import EmbeddingService, embedding_from_script_output
-from ..services.csv_embedding_processor import CSVEmbeddingProcessor, process_external_csv
+from ..services.embedding_service import EmbeddingService
+from ..services.csv_embedding_processor import CSVEmbeddingProcessor
 from ..models.embedding import Embedding
 from ..models.document import Document
 from ..schemas.parsed_document import ParsedDocument
