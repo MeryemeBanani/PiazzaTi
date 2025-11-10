@@ -28,9 +28,10 @@ export default function App() {
     
     const poll = async () => {
       try {
-        console.log(`🔍 Checking task status for: ${id}`)
+        console.log(`🔍 Checking task status for: ${id} (attempt ${attempts + 1}/${maxAttempts})`)
+        console.log(`🌐 Full URL: ${window.location.origin}/parse/task/${id}`)
         const res = await fetch(`/parse/task/${id}`)
-        console.log(`📡 Response status: ${res.status}`)
+        console.log(`📡 Response status: ${res.status} ${res.statusText}`)
         if (!res.ok) {
           const errorText = await res.text()
           console.error(`❌ Task check failed: ${res.status} - ${errorText}`)
@@ -38,6 +39,7 @@ export default function App() {
         }
         
         const taskData = await res.json()
+        console.log(`📊 Full task data:`, JSON.stringify(taskData, null, 2))
         
         if (taskData.status === 'completed' && taskData.result) {
           console.log('✅ Parsing completed! ParsedDocument received:', taskData.result)
@@ -54,6 +56,7 @@ export default function App() {
           return
         } else if (taskData.status === 'processing' || taskData.status === 'parsing') {
           // Update result with progress info
+          console.log('📊 Progress update:', taskData)
           setResult({
             status: 'processing',
             task_id: id,
@@ -297,26 +300,49 @@ export default function App() {
                   )}
                   
                   {/* Progress Bar */}
-                  {result.elapsed_seconds && result.estimated_remaining && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm text-indigo-700">
-                        <span>Progresso</span>
-                        <span>{Math.round((result.elapsed_seconds / (result.elapsed_seconds + result.estimated_remaining)) * 100)}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div 
-                          className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500 ease-out"
-                          style={{
-                            width: `${Math.min(95, (result.elapsed_seconds / (result.elapsed_seconds + result.estimated_remaining)) * 100)}%`
-                          }}
-                        ></div>
-                      </div>
-                      <div className="flex justify-between text-xs text-gray-600">
-                        <span>⏱️ Trascorsi: {result.elapsed_seconds}s</span>
-                        <span>⌛ Rimanenti: ~{Math.round(result.estimated_remaining)}s</span>
-                      </div>
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    {result.elapsed_seconds && result.estimated_remaining ? (
+                      // Progress bar con dati reali
+                      <>
+                        <div className="flex justify-between text-sm text-indigo-700 font-semibold">
+                          <span>🎯 Progresso CV Parsing</span>
+                          <span className="bg-indigo-100 px-2 py-1 rounded text-xs">
+                            {Math.round((result.elapsed_seconds / (result.elapsed_seconds + result.estimated_remaining)) * 100)}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-4 border border-gray-300">
+                          <div 
+                            className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 h-full rounded-full transition-all duration-1000 ease-out relative overflow-hidden"
+                            style={{
+                              width: `${Math.min(95, (result.elapsed_seconds / (result.elapsed_seconds + result.estimated_remaining)) * 100)}%`
+                            }}
+                          >
+                            <div className="absolute inset-0 bg-white opacity-20 animate-pulse"></div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-sm text-gray-600 bg-white rounded p-2 border">
+                          <span>⏱️ Trascorsi: <strong>{result.elapsed_seconds}s</strong></span>
+                          <span>⌛ Rimanenti: <strong>~{Math.round(result.estimated_remaining)}s</strong></span>
+                        </div>
+                      </>
+                    ) : (
+                      // Progress bar animata di fallback
+                      <>
+                        <div className="flex justify-between text-sm text-indigo-700 font-semibold">
+                          <span>🎯 Parsing in corso...</span>
+                          <span className="bg-yellow-100 px-2 py-1 rounded text-xs animate-pulse">AI Working</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-4 border border-gray-300">
+                          <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 h-full rounded-full animate-pulse">
+                            <div className="h-full bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-bounce"></div>
+                          </div>
+                        </div>
+                        <div className="text-center text-sm text-gray-600 bg-white rounded p-2 border">
+                          <span>🧠 Ollama AI sta analizzando il documento...</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
                   
                   {taskId && (
                     <div className="flex items-center text-xs text-blue-500">
