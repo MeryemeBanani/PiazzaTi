@@ -21,7 +21,7 @@ import numpy as np
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from ..database import get_db
+from ..database import get_session
 from ..models.embedding import Embedding
 from ..models.document import Document
 
@@ -113,7 +113,7 @@ class CSVEmbeddingProcessor:
         Returns:
             Processing results summary
         """
-        session = self.session or next(get_db())
+        session = self.session or next(get_session())
         
         try:
             if not os.path.exists(csv_file_path):

@@ -142,8 +142,16 @@ export default function App() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 text-gray-900">
       <div className="max-w-6xl mx-auto p-6">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-indigo-900 mb-2">🚀 PiazzaTi</h1>
+          <h1 className="text-4xl font-bold text-indigo-900 mb-2">🚀 PiazzaTi CV Parser</h1>
           <p className="text-lg text-indigo-600">Intelligent CV Parser with AI</p>
+          <div className="mt-4">
+            <a 
+              href="/home" 
+              className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 underline"
+            >
+              ← Torna alla Home
+            </a>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

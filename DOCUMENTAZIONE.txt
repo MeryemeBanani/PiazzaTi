@@ -74,9 +74,9 @@ Stato (2025-10-31)
 - Parser CV: Identificati `backend/scripts/parse_cli.py` e `backend/app/parsers/ollama_cv_parser.py`. Proposto patch di riduzione parametri LLM (es. OLLAMA_NUM_PREDICT 12000 → 512), limite slice prompt e flag `PARSING_NO_LLM` per esecuzioni rapide senza LLM.
 - Verifiche: L'utente ha eseguito la riparazione remota e il backend ha risposto con /health positivo; le modifiche al workflow sono presenti nel repository e vanno verificate con un run CI completo.
 
-Parsing CV — spiegazione passo-passo (molto dettagliata e lenta)
+Parsing CV — spiegazione passo-passo:
 -----------------------------------------------------------------
-Questa sezione spiega, con frasi semplici e lente, come funziona il parser dei CV presente nel codice
+Questa sezione spiega come funziona il parser dei CV presente nel codice:
 (`backend/app/parsers/ollama_cv_parser.py`) e quale oggetto restituisce (`backend/app/schemas/parsed_document.py`).
 
 1) Punto di partenza: il file che vuoi analizzare
