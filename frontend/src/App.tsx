@@ -48,13 +48,14 @@ export default function App() {
           setPolling(false)
           setTaskId(null)
           return
-        } else if (taskData.status === 'processing') {
+        } else if (taskData.status === 'processing' || taskData.status === 'parsing') {
           // Update result with progress info
           setResult({
             status: 'processing',
             task_id: id,
             message: `Parsing in corso... (${taskData.elapsed_seconds || 0}s trascorsi)`,
             estimated_remaining: taskData.estimated_remaining || 180,
+            elapsed_seconds: taskData.elapsed_seconds || 0,
             filename: taskData.filename
           })
           
@@ -281,13 +282,35 @@ export default function App() {
                   <span className="font-semibold text-blue-900 text-lg">Parsing in corso...</span>
                 </div>
                 
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <p className="text-blue-700">{result.message}</p>
                   
                   {result.filename && (
                     <div className="flex items-center text-sm text-blue-600">
                       <span className="mr-2">📄</span>
                       <span className="font-medium">{result.filename}</span>
+                    </div>
+                  )}
+                  
+                  {/* Progress Bar */}
+                  {result.elapsed_seconds && result.estimated_remaining && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm text-indigo-700">
+                        <span>Progresso</span>
+                        <span>{Math.round((result.elapsed_seconds / (result.elapsed_seconds + result.estimated_remaining)) * 100)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div 
+                          className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500 ease-out"
+                          style={{
+                            width: `${Math.min(95, (result.elapsed_seconds / (result.elapsed_seconds + result.estimated_remaining)) * 100)}%`
+                          }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-600">
+                        <span>⏱️ Trascorsi: {result.elapsed_seconds}s</span>
+                        <span>⌛ Rimanenti: ~{Math.round(result.estimated_remaining)}s</span>
+                      </div>
                     </div>
                   )}
                   
@@ -298,17 +321,17 @@ export default function App() {
                     </div>
                   )}
                   
-                  {result.estimated_remaining && (
-                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border">
-                      <div className="flex items-center text-sm text-indigo-700">
-                        <span className="mr-2">⏱️</span>
-                        <span>Tempo rimanente: ~{Math.round(result.estimated_remaining)}s</span>
+                  <div className="p-3 bg-white rounded-lg border">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center text-indigo-700">
+                        <span className="mr-2">🧠</span>
+                        <span>Ollama AI sta analizzando il CV...</span>
                       </div>
                       <div className="text-xs text-gray-500">
-                        {result.elapsed_seconds && `${result.elapsed_seconds}s trascorsi`}
+                        Modello: llama3.2:3b
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             )}
