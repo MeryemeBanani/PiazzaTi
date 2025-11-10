@@ -36,7 +36,8 @@ export default function App() {
         const taskData = await res.json()
         
         if (taskData.status === 'completed' && taskData.result) {
-          setResult(taskData.result)
+          console.log('✅ Parsing completed! ParsedDocument received:', taskData.result)
+          setResult(taskData.result)  // This is the ParsedDocument from ollama_cv_parser
           setLoading(false)
           setPolling(false)
           setTaskId(null)
@@ -162,6 +163,7 @@ export default function App() {
               </div>
               <h2 className="text-xl font-semibold text-gray-800">Upload CV</h2>
             </div>
+
             <form onSubmit={handleUpload}>
               <div className="space-y-4">
                 <label className="block">
@@ -201,12 +203,7 @@ export default function App() {
                     id="file-upload"
                   />
                   <label htmlFor="file-upload" className="cursor-pointer">
-                    <div className="text-gray-400 mb-2">
-                      <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-1">
+                    <p className="text-sm text-gray-600 mb-1 py-8">
                       {file ? `📄 ${file.name}` : '📎 Clicca per selezionare un PDF'}
                     </p>
                     <p className="text-xs text-gray-400">Supporto solo file PDF</p>
@@ -321,7 +318,7 @@ export default function App() {
                 <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
                   <div className="flex items-center text-green-800">
                     <span className="mr-2">✅</span>
-                    <span className="font-medium">Parsing completato!</span>
+                    <span className="font-medium">CV Parserato con successo!</span>
                   </div>
                   <button 
                     onClick={() => {
@@ -336,20 +333,147 @@ export default function App() {
                   </button>
                 </div>
                 
-                <div className="bg-gray-50 rounded-lg overflow-hidden">
-                  <div className="bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 flex items-center justify-between">
-                    <span>📋 Dati estratti (JSON)</span>
-                    <button 
-                      onClick={() => navigator.clipboard.writeText(JSON.stringify(result, null, 2))}
-                      className="text-xs text-gray-600 hover:text-gray-800 underline"
-                    >
-                      Copia
-                    </button>
+                {/* CV Structured Data Display */}
+                <div className="border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl overflow-hidden shadow-lg">
+                  <div className="bg-gradient-to-r from-blue-100 to-indigo-100 px-4 py-3 text-sm font-semibold text-blue-800 flex items-center justify-between border-b border-blue-200">
+                    <span className="flex items-center">
+                      <span className="mr-2">�</span>
+                      <span>Dati CV Estratti</span>
+                    </span>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => navigator.clipboard.writeText(JSON.stringify(result, null, 2))}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium bg-white px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 transition-colors"
+                      >
+                        📋 Copia JSON
+                      </button>
+                    </div>
                   </div>
-                  <div className="overflow-auto max-h-[50vh] p-4">
-                    <pre className="text-xs text-gray-800 whitespace-pre-wrap">
-                      {JSON.stringify(result, null, 2)}
-                    </pre>
+                  <div className="p-5 bg-white">
+                    {result?.personal_info?.full_name && (
+                      <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <h3 className="font-semibold text-blue-900 text-lg mb-1">
+                          {result.personal_info.full_name}
+                        </h3>
+                        {result.personal_info.email && (
+                          <p className="text-sm text-blue-700">📧 {result.personal_info.email}</p>
+                        )}
+                        {result.personal_info.phone && (
+                          <p className="text-sm text-blue-700">📱 {result.personal_info.phone}</p>
+                        )}
+                        {result.personal_info.address && (
+                          <p className="text-sm text-blue-700">� {result.personal_info.address}</p>
+                        )}
+                        {result.personal_info.linkedin && (
+                          <p className="text-sm text-blue-700">🔗 LinkedIn: {result.personal_info.linkedin}</p>
+                        )}
+                      </div>
+                    )}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      {result?.skills && result.skills.length > 0 && (
+                        <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                          <h4 className="font-semibold text-green-800 mb-2">🔧 Competenze</h4>
+                          <div className="flex flex-wrap gap-1">
+                            {result.skills.map((skill: any, index: number) => (
+                              <span key={index} className="px-2 py-1 bg-green-200 text-green-800 rounded-full text-xs">
+                                {typeof skill === 'string' ? skill : skill.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {result?.languages && result.languages.length > 0 && (
+                        <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                          <h4 className="font-semibold text-purple-800 mb-2">🌍 Lingue</h4>
+                          <div className="space-y-1">
+                            {result.languages.map((lang: any, index: number) => (
+                              <div key={index} className="text-sm text-purple-700">
+                                {lang.name} {lang.proficiency && `(${lang.proficiency})`}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {result?.experience && result.experience.length > 0 && (
+                      <div className="mb-4 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                        <h4 className="font-semibold text-orange-800 mb-2">💼 Esperienze Lavorative</h4>
+                        <div className="space-y-2">
+                          {result.experience.slice(0, 3).map((exp: any, index: number) => (
+                            <div key={index} className="text-sm text-orange-700 border-l-2 border-orange-300 pl-3">
+                              <div className="font-medium">{exp.title}</div>
+                              <div className="text-orange-600">
+                                {exp.company} {exp.city && `• ${exp.city}`}
+                              </div>
+                              <div className="text-xs text-orange-500">
+                                {exp.start_date} {exp.end_date ? `- ${exp.end_date}` : '- Attuale'}
+                              </div>
+                            </div>
+                          ))}
+                          {result.experience.length > 3 && (
+                            <div className="text-xs text-orange-600">
+                              ... e altre {result.experience.length - 3} esperienze
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {result?.education && result.education.length > 0 && (
+                      <div className="mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                        <h4 className="font-semibold text-indigo-800 mb-2">🎓 Formazione</h4>
+                        <div className="space-y-2">
+                          {result.education.map((edu: any, index: number) => (
+                            <div key={index} className="text-sm text-indigo-700">
+                              <div className="font-medium">{edu.degree} {edu.field_of_study && `in ${edu.field_of_study}`}</div>
+                              <div className="text-indigo-600">
+                                {edu.institution} {edu.city && `• ${edu.city}`}
+                              </div>
+                              {edu.graduation_year && (
+                                <div className="text-xs text-indigo-500">Anno: {edu.graduation_year}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {result?.summary && (
+                      <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <h4 className="font-semibold text-gray-800 mb-2">📝 Riassunto Professionale</h4>
+                        <p className="text-sm text-gray-700">{result.summary}</p>
+                      </div>
+                    )}
+
+                    {result?.certifications && result.certifications.length > 0 && (
+                      <div className="mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <h4 className="font-semibold text-yellow-800 mb-2">🏆 Certificazioni</h4>
+                        <div className="space-y-1">
+                          {result.certifications.map((cert: any, index: number) => (
+                            <div key={index} className="text-sm text-yellow-700">
+                              <span className="font-medium">{cert.name}</span>
+                              {cert.issuer && <span className="text-yellow-600"> • {cert.issuer}</span>}
+                              {cert.date_obtained && <span className="text-xs text-yellow-500"> ({cert.date_obtained})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Raw JSON fallback */}
+                    <details className="mt-4">
+                      <summary className="cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-800">
+                        📄 Visualizza JSON completo
+                      </summary>
+                      <div className="mt-2 p-3 bg-gray-50 rounded border overflow-auto max-h-[30vh]">
+                        <pre className="text-xs text-gray-800 whitespace-pre-wrap font-mono">
+                          {JSON.stringify(result, null, 2)}
+                        </pre>
+                      </div>
+                    </details>
                   </div>
                 </div>
               </div>
