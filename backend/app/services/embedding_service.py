@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from ..models.embedding import Embedding
 from ..models.document import Document
-from ..database import get_session
+from ..database import get_db
 
 
 class EmbeddingService:
@@ -44,7 +44,7 @@ class EmbeddingService:
         Returns:
             Created/updated Embedding record
         """
-        session = self.session or next(get_session())
+        session = self.session or next(get_db())
         
         try:
             # Convert numpy array to list if needed
@@ -112,7 +112,7 @@ class EmbeddingService:
         Returns:
             List of (Document, similarity_score) tuples, ordered by similarity desc
         """
-        session = self.session or next(get_session())
+        session = self.session or next(get_db())
         
         try:
             # Convert numpy array to list if needed
@@ -183,7 +183,7 @@ class EmbeddingService:
         Returns:
             List of matching (Document, similarity_score) tuples
         """
-        session = self.session or next(get_session())
+        session = self.session or next(get_db())
         
         try:
             # Convert numpy array to list if needed  
@@ -255,7 +255,7 @@ class EmbeddingService:
 
     async def get_embedding_stats(self) -> dict:
         """Get statistics about stored embeddings."""
-        session = self.session or next(get_session())
+        session = self.session or next(get_db())
         
         try:
             stats_query = text("""
@@ -308,7 +308,7 @@ class EmbeddingService:
         Returns:
             List of created Embedding objects
         """
-        session = self.session or next(get_session())
+        session = self.session or next(get_db())
         
         try:
             created_embeddings = []
