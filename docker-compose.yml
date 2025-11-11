@@ -1,6 +1,6 @@
 services:
 
-  # Database PostgreSQL con pgvector
+  # Database PostgreSQL con pgvector (optimized for Scaleway DEV1-XL)
   postgres:
     image: pgvector/pgvector:pg15
     container_name: piazzati-postgres
@@ -8,8 +8,12 @@ services:
       POSTGRES_DB: db_piazzati
       POSTGRES_USER: piazzati_user
       POSTGRES_PASSWORD: piazzati_password
+      POSTGRES_SHARED_PRELOAD_LIBRARIES: pg_stat_statements,pgvector
+      POSTGRES_MAX_CONNECTIONS: 200
+      POSTGRES_SHARED_BUFFERS: 2GB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 6GB
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,6 +21,35 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
+
+  # Ollama LLM Service (CPU-only, optimized for Scaleway DEV1-XL: 8 vCPU, 16GB RAM)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: piazzati-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_FLASH_ATTENTION=1
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '6'
+        reservations:
+          memory: 4G
+          cpus: '4'
 
   # Backend FastAPI
   piazzati-backend:
@@ -31,10 +64,33 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      ollama:
+        condition: service_started
     environment:
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - DATABASE_URL=postgresql://piazzati_user:piazzati_password@postgres:5432/db_piazzati
+      - WORKER_TIMEOUT=300
+      - MAX_WORKERS=4
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
+
+  # Frontend Nginx
+  piazzati-frontend:
+    build: ./frontend
+    container_name: piazzati-frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - piazzati-backend
+    restart: unless-stopped
     
 
   # PostgreSQL Exporter per metriche database
@@ -127,4 +183,5 @@ volumes:
   postgres_data:
   prometheus_data:
   grafana_data:
+  ollama_data:
 
