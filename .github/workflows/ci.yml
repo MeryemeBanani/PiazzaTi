@@ -74,7 +74,22 @@ jobs:
           cd backend
           flake8 app --max-line-length=88 --extend-ignore=E203,W503 || true
 
-      - name: Run tests
+      - name: Set up Node.js for frontend tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Test frontend build
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Run backend tests
         env:
           DATABASE_URL: postgresql://piazzati_user:piazzati_password@localhost:5432/db_piazzati
         run: |
@@ -131,17 +146,7 @@ jobs:
       - name: Checkout (for helper scripts)
         uses: actions/checkout@v4
 
-      - name: Set up Node.js (build frontend)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Build frontend
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run build
-          tar -czf ../frontend_dist.tgz dist
+      # Frontend will be built using Docker on the server instead of uploading separately
 
       - name: Prepare SSH key
         run: |
@@ -162,8 +167,7 @@ jobs:
           IMAGE_FULL="${IMAGE_FULL}"
           echo "[deploy] IMAGE_FULL=${IMAGE_FULL}"
 
-          # Upload frontend and nginx config (use the ssh key prepared earlier)
-          scp -i ~/.ssh/id_piazzati frontend_dist.tgz root@${SCALEWAY_INSTANCE_IP}:/tmp/frontend_dist.tgz || true
+          # Upload nginx config only (frontend will be built via Docker)
           scp -i ~/.ssh/id_piazzati deploy/nginx_piazzati_parse_grafana_home.conf root@${SCALEWAY_INSTANCE_IP}:/tmp/piazzati_nginx.conf || true
 
           # Export registry credentials and flags into the remote shell, then run heredoc
@@ -194,40 +198,9 @@ jobs:
             echo "Logging in to registry"
             echo "${SCALEWAY_REGISTRY_PASSWORD}" | docker login rg.nl-ams.scw.cloud -u "${SCALEWAY_REGISTRY_USERNAME}" --password-stdin
 
-            # Install uploaded frontend into /var/www/piazzati atomically
-            if [ -f /tmp/frontend_dist.tgz ]; then
-              # create a staging webroot and extract the frontend there
-              tmp_www="/var/www/piazzati.new.$(date +%s)"
-              mkdir -p "$tmp_www"
-              tar -xzf /tmp/frontend_dist.tgz -C "$tmp_www" || true
-              # If the build produced a top-level "dist" folder, move its content up
-              if [ -d "$tmp_www/dist" ]; then
-                mv "$tmp_www/dist"/* "$tmp_www"/ || true
-                rmdir "$tmp_www/dist" || true
-              fi
-              # Preserve the existing home.html (if present) by copying it into the new webroot
-              if [ -f /var/www/piazzati/home.html ]; then
-                cp /var/www/piazzati/home.html "$tmp_www"/home.html || true
-              fi
-              # Set reasonable perms so nginx (www-data) can read files
-              chmod -R 755 "$tmp_www" || true
-              # Atomically swap the webroot: move old aside, install new
-              if [ -d /var/www/piazzati ]; then
-                mv /var/www/piazzati "${tmp_www}.old" || true
-              fi
-              mv "$tmp_www" /var/www/piazzati || true
-              # Remove previous backup if exists
-              if [ -d "${tmp_www}.old" ]; then
-                rm -rf "${tmp_www}.old" || true
-              fi
-            fi
-
-            # Install nginx conf and home page if uploaded
+            # Install nginx conf if uploaded
             if [ -f /tmp/piazzati_nginx.conf ]; then
               mv /tmp/piazzati_nginx.conf /etc/nginx/conf.d/piazzati_parse_grafana_home.conf || true
-            fi
-            if [ -f /tmp/home.html ]; then
-              mv /tmp/home.html /var/www/piazzati/home.html || true
             fi
 
             # Try to validate nginx config and reload so the new conf takes effect immediately
@@ -267,8 +240,9 @@ jobs:
               sleep $((attempts * 5))
             done
 
-            # Ensure all services from docker-compose.yml are started (especially frontend + ollama)
-            echo "[remote] Starting all services from docker-compose.yml"
+            # Build and start all services (this will rebuild frontend image with latest code)
+            echo "[remote] Building and starting all services"
+            docker compose -f docker-compose.yml -f docker-compose.deploy.yml build --no-cache piazzati-frontend || true
             docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d || true
             
             # Verify critical services are running
