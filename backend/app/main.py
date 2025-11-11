@@ -43,7 +43,7 @@ app = FastAPI(title="PiazzaTi Backend", version="1.0.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Register parsing API router (PDF -> parsed JSON)
-app.include_router(parse_router)
+app.include_router(parse_router, prefix="/api")
 
 # Register embeddings API router (CSV processing & similarity search)
 app.include_router(embeddings_router, prefix="/api")
