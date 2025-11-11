@@ -189,7 +189,7 @@ export default function App() {
 
     try {
       // Use background=true for async parsing (default behavior)
-      const res = await fetch('/parse/upload?background=true', {
+      const res = await fetch('/api/parse/upload?background=true', {
         method: 'POST',
         body: fd
       })
