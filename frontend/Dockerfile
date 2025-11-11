@@ -1,4 +1,4 @@
-# Frontend Dockerfile - Production optimized for Scaleway
+# Frontend Dockerfile - Home + Parse App
 FROM node:20-alpine as builder
 
 WORKDIR /app
@@ -24,7 +24,7 @@ COPY --from=builder /app/dist /var/www/piazzati
 COPY nginx/nginx.prod.conf /etc/nginx/conf.d/default.conf
 
 # Create health endpoint
-RUN echo '<!DOCTYPE html><html><body>OK</body></html>' > /var/www/piazzati/health
+RUN echo 'OK' > /var/www/piazzati/health
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

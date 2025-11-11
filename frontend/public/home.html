@@ -20,29 +20,28 @@
       <h1>Piazzati — Pannello</h1>
       <p>Scegli una destinazione:</p>
       <div class="buttons">
-     <!-- Link to Grafana route. We'll set the href at runtime so it uses the current host
-       (avoids opening Grafana on localhost when the service is reverse-proxied to a public IP) -->
-     <a id="grafana-link" class="button" href="#" target="_blank" rel="noopener">Apri Grafana</a>
-        <!-- Link to the front-end upload SPA mounted under /parse/ -->
-        <a class="button alt" href="/parse/">Vai alla pagina di upload CV</a>
+        <!-- Link diretto a Grafana sulla porta 3000 -->
+        <a id="grafana-link" class="button" href="#" target="_blank" rel="noopener">Apri Grafana</a>
+        <!-- Link alla pagina di parsing -->
+        <a class="button alt" href="/parse">Vai alla pagina di upload CV</a>
       </div>
       <footer>
-        Se Grafana è esposto su :3000 direttamente puoi anche usare http://&lt;ip&gt;:3000
+        Grafana: porta 3000 | Parse App: /parse | Backend API: porta 8000
       </footer>
     </div>
     <script>
-      // Prefer opening Grafana via the same host (reverse-proxied path /grafana/).
-      // This prevents opening a hardcoded http://localhost:3000 when the public host differs.
+      // Link diretto a Grafana sulla porta 3000
       (function(){
         try {
           var link = document.getElementById('grafana-link');
           if (!link) return;
-          // Use origin (scheme + host + optional port) and append /grafana/
-          var grafanaUrl = window.location.origin + '/grafana/';
+          // Usa l'host corrente + porta 3000
+          var grafanaUrl = window.location.protocol + '//' + window.location.hostname + ':3000/';
           link.href = grafanaUrl;
         } catch (e) {
-          // fallback to relative path
-          var l = document.getElementById('grafana-link'); if (l) l.href = '/grafana/';
+          // fallback
+          var l = document.getElementById('grafana-link'); 
+          if (l) l.href = window.location.hostname + ':3000';
         }
       })();
     </script>
