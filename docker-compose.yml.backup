@@ -1,0 +1,226 @@
+services:
+
+  # Database PostgreSQL con pgvector (optimized for Scaleway DEV1-XL)
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: piazzati-postgres
+    environment:
+      POSTGRES_DB: db_piazzati
+      POSTGRES_USER: piazzati_user
+      POSTGRES_PASSWORD: piazzati_password
+      POSTGRES_SHARED_PRELOAD_LIBRARIES: pg_stat_statements,pgvector
+      POSTGRES_MAX_CONNECTIONS: 200
+      POSTGRES_SHARED_BUFFERS: 2GB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 6GB
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U piazzati_user -d db_piazzati"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - piazzati_network
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: '1'
+
+  # Ollama LLM Service - Optimized for Scaleway DEV1-XL with llama3.2:3b (3GB model)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: piazzati-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_MODELS=llama3.2:3b
+      - OLLAMA_KEEP_ALIVE=5m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - piazzati_network
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+          cpus: '4'
+        reservations:
+          memory: 3G
+          cpus: '2'
+
+  # Backend FastAPI
+  piazzati-backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    container_name: piazzati-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - DATABASE_URL=postgresql://piazzati_user:piazzati_password@postgres:5432/db_piazzati
+      - WORKER_TIMEOUT=300
+      - MAX_WORKERS=4
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - piazzati_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
+
+  # Frontend (Home + Parse App)
+  piazzati-frontend:
+    build: ./frontend
+    container_name: piazzati-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      piazzati-backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - piazzati_network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    
+
+  # PostgreSQL Exporter per metriche database
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: piazzati-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://piazzati_user:piazzati_password@postgres:5432/db_piazzati?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - piazzati_network
+
+  # Node Exporter per metriche di sistema
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: piazzati-node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: unless-stopped
+    networks:
+      - piazzati_network
+
+  # cAdvisor per metriche container Docker
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    container_name: piazzati-cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    restart: unless-stopped
+    networks:
+      - piazzati_network
+
+  # Prometheus per raccolta metriche
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: piazzati-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alert-rules.yml:/etc/prometheus/alert-rules.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - piazzati-backend
+      - postgres-exporter
+    restart: unless-stopped
+    networks:
+      - piazzati_network
+
+  # Grafana per visualizzazione metriche
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: piazzati-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - piazzati_network
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+  ollama_data:
+
+networks:
+  piazzati_network:
+    driver: bridge
+

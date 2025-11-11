@@ -55,7 +55,7 @@ def display_parsing_results(doc: ParsedDocument) -> str:
     if doc.skills:
         lines.append("\nSkills:")
         for s in doc.skills[:40]:
-            lines.append(f"  - {s.name} ({s.level or 'n/a'})")
+            lines.append(f"  - {s.name} ({s.proficiency or 'n/a'})")
 
     if doc.warnings:
         lines.append("\nWarnings:")
