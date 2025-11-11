@@ -267,7 +267,13 @@ jobs:
               sleep $((attempts * 5))
             done
 
+            # Ensure all services from docker-compose.yml are started (especially frontend + ollama)
+            echo "[remote] Starting all services from docker-compose.yml"
             docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d || true
+            
+            # Verify critical services are running
+            echo "[remote] Checking service status"
+            docker compose -f docker-compose.yml -f docker-compose.deploy.yml ps
 
             # health check
             max_wait=60
