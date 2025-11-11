@@ -20,14 +20,14 @@ try:
     # Try container path first (when running inside Docker)
     from app.services.csv_embedding_processor import (
         CSVEmbeddingProcessor, 
-        process_external script_csv,
+        process_external_script_csv,
         watch_and_process_csv_directory
     )
 except ImportError:
     # Fallback to host path (when running on host)
     from backend.app.services.csv_embedding_processor import (
         CSVEmbeddingProcessor, 
-        process_external script_csv,
+        process_external_script_csv,
         watch_and_process_csv_directory
     )
 
@@ -46,7 +46,7 @@ def setup_data_directories():
         print(f"📁 Created directory: {dir_path}")
 
 
-def process_external script_csv_simple(csv_filename: str) -> Dict[str, Any]:
+def process_external_script_csv_simple(csv_filename: str) -> Dict[str, Any]:
     """
     Simple function to process external CSV file.
     
@@ -62,7 +62,7 @@ def process_external script_csv_simple(csv_filename: str) -> Dict[str, Any]:
         raise FileNotFoundError(f"CSV file not found: {csv_path}")
     
     print(f"🔄 Processing CSV file: {csv_filename}")
-    results = process_external script_csv(csv_path)
+    results = process_external_script_csv(csv_path)
     
     print(f"✅ Processing complete:")
     print(f"   📊 Processed: {results['processed']} embeddings")
@@ -272,7 +272,7 @@ def main():
                 print("❌ Please specify CSV filename")
                 return
             filename = sys.argv[2]
-            process_external script_csv_simple(filename)
+            process_external_script_csv_simple(filename)
             
         elif command == "batch":
             manual_batch_process()

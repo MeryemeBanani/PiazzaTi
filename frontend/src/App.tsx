@@ -1,9 +1,86 @@
 import React, { useState } from 'react'
 
-// The parsed document shape comes from the backend and can be arbitrary.
-// Use `any` here for flexibility; disable the explicit-any lint rule for this alias.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ParsedDocument = any
+// TypeScript interface matching the backend ParsedDocument model
+interface PersonalInfo {
+  full_name?: string
+  email?: string
+  phone?: string
+  address?: string
+  city?: string
+  country?: string
+  postal_code?: string
+  linkedin?: string
+  github?: string
+  website?: string
+}
+
+interface Experience {
+  title?: string
+  company?: string
+  city?: string
+  start_date?: string
+  end_date?: string
+  is_current?: boolean
+  description?: string
+  responsibilities?: string[]
+}
+
+interface Education {
+  degree?: string
+  field_of_study?: string
+  institution?: string
+  city?: string
+  start_date?: string
+  end_date?: string
+  graduation_year?: number
+  gpa?: string
+}
+
+interface Skill {
+  name: string
+  category?: string
+  proficiency?: string
+}
+
+interface Language {
+  name: string
+  proficiency?: string
+  level?: string
+}
+
+interface Certification {
+  name: string
+  issuer?: string
+  date_obtained?: string
+}
+
+interface ParsedDocument {
+  document_id?: string
+  document_type?: string
+  user_id?: string
+  personal_info?: PersonalInfo
+  tags?: Record<string, boolean | string | number>
+  summary?: string
+  experience?: Experience[]
+  education?: Education[]
+  skills?: Skill[]
+  languages?: Language[]
+  certifications?: Certification[]
+  file_name?: string
+  parsing_method?: string
+  confidence_score?: number
+  parsed_at?: string
+  warnings?: string[]
+  
+  // Task status fields (durante il polling)
+  status?: string
+  task_id?: string
+  message?: string
+  elapsed_seconds?: number
+  estimated_remaining?: number
+  filename?: string
+  timestamp?: string
+}
 
 
 export default function App() {
@@ -29,8 +106,8 @@ export default function App() {
     const poll = async () => {
       try {
         console.log(`🔍 Checking task status for: ${id} (attempt ${attempts + 1}/${maxAttempts})`)
-        console.log(`🌐 Full URL: ${window.location.origin}/parse/task/${id}`)
-        const res = await fetch(`/parse/task/${id}`)
+        console.log(`🌐 Full URL: ${window.location.origin}/api/parse/task/${id}`)
+        const res = await fetch(`/api/parse/task/${id}`)
         console.log(`📡 Response status: ${res.status} ${res.statusText}`)
         if (!res.ok) {
           const errorText = await res.text()
@@ -428,7 +505,7 @@ export default function App() {
                         <div className="p-3 bg-green-50 rounded-lg border border-green-200">
                           <h4 className="font-semibold text-green-800 mb-2">🔧 Competenze</h4>
                           <div className="flex flex-wrap gap-1">
-                            {result.skills.map((skill: any, index: number) => (
+                            {result.skills.map((skill: Skill, index: number) => (
                               <span key={index} className="px-2 py-1 bg-green-200 text-green-800 rounded-full text-xs">
                                 {typeof skill === 'string' ? skill : skill.name}
                               </span>
@@ -441,9 +518,9 @@ export default function App() {
                         <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
                           <h4 className="font-semibold text-purple-800 mb-2">🌍 Lingue</h4>
                           <div className="space-y-1">
-                            {result.languages.map((lang: any, index: number) => (
+                            {result.languages.map((lang: Language, index: number) => (
                               <div key={index} className="text-sm text-purple-700">
-                                {lang.name} {lang.proficiency && `(${lang.proficiency})`}
+                                {typeof lang === 'string' ? lang : `${lang.name}${lang.proficiency ? ` (${lang.proficiency})` : ''}`}
                               </div>
                             ))}
                           </div>
@@ -455,11 +532,11 @@ export default function App() {
                       <div className="mb-4 p-3 bg-orange-50 rounded-lg border border-orange-200">
                         <h4 className="font-semibold text-orange-800 mb-2">💼 Esperienze Lavorative</h4>
                         <div className="space-y-2">
-                          {result.experience.slice(0, 3).map((exp: any, index: number) => (
+                          {result.experience.slice(0, 3).map((exp: Experience, index: number) => (
                             <div key={index} className="text-sm text-orange-700 border-l-2 border-orange-300 pl-3">
                               <div className="font-medium">{exp.title}</div>
                               <div className="text-orange-600">
-                                {exp.company} {exp.city && `• ${exp.city}`}
+                                {exp.company}
                               </div>
                               <div className="text-xs text-orange-500">
                                 {exp.start_date} {exp.end_date ? `- ${exp.end_date}` : '- Attuale'}
@@ -479,14 +556,14 @@ export default function App() {
                       <div className="mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
                         <h4 className="font-semibold text-indigo-800 mb-2">🎓 Formazione</h4>
                         <div className="space-y-2">
-                          {result.education.map((edu: any, index: number) => (
+                          {result.education.map((edu: Education, index: number) => (
                             <div key={index} className="text-sm text-indigo-700">
                               <div className="font-medium">{edu.degree} {edu.field_of_study && `in ${edu.field_of_study}`}</div>
                               <div className="text-indigo-600">
-                                {edu.institution} {edu.city && `• ${edu.city}`}
+                                {edu.institution}
                               </div>
-                              {edu.graduation_year && (
-                                <div className="text-xs text-indigo-500">Anno: {edu.graduation_year}</div>
+                              {edu.end_date && (
+                                <div className="text-xs text-indigo-500">Anno: {edu.end_date}</div>
                               )}
                             </div>
                           ))}
@@ -505,7 +582,7 @@ export default function App() {
                       <div className="mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                         <h4 className="font-semibold text-yellow-800 mb-2">🏆 Certificazioni</h4>
                         <div className="space-y-1">
-                          {result.certifications.map((cert: any, index: number) => (
+                          {result.certifications.map((cert: Certification, index: number) => (
                             <div key={index} className="text-sm text-yellow-700">
                               <span className="font-medium">{cert.name}</span>
                               {cert.issuer && <span className="text-yellow-600"> • {cert.issuer}</span>}

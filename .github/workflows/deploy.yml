@@ -1,6 +1,0 @@
-name: REMOVED - use ci.yml
-
-# This workflow has been removed / disabled. The CI workflow `ci.yml` contains
-# the deploy job and frontend build/upload steps. Keep this file if you want a
-# separate manual deploy pipeline, otherwise you can delete it.
-
