@@ -232,7 +232,7 @@ export default function App() {
           <p className="text-lg text-indigo-600">Intelligent CV Parser with AI</p>
           <div className="mt-4">
             <a 
-              href="/home" 
+              href="/" 
               className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 underline"
             >
               ← Torna alla Home
