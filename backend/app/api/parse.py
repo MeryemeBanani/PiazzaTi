@@ -31,7 +31,7 @@ _task_results = {}
 def get_parser() -> OllamaCVParser:
     global _parser
     if _parser is None:
-        _parser = OllamaCVParser(model="llama3.2:1b")
+        _parser = OllamaCVParser(model="llama3.2:3b")
     return _parser
 
 
@@ -69,7 +69,7 @@ async def reinitialize_llm(base_url: str = "http://host.docker.internal:11434"):
     
     try:
         # Create new parser instance with updated base_url
-        _parser = OllamaCVParser(model="llama3.2:1b", base_url=base_url)
+        _parser = OllamaCVParser(model="llama3.2:3b", base_url=base_url)
         
         status = {
             "success": True,
