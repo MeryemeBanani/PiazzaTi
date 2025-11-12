@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ..parsers.ollama_cv_parser import OllamaCVParser
 from ..utils.parsing_display import display_parsing_results
+from ..services.cv_batch_storage import get_batch_storage
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -112,6 +113,81 @@ async def get_task_status(task_id: str):
     return result
 
 
+@router.get("/batch/stats")
+async def get_batch_stats():
+    """Get statistics about CV files saved for batch processing."""
+    batch_storage = get_batch_storage()
+    stats = batch_storage.get_batch_stats()
+    
+    return {
+        "batch_processing": {
+            "enabled": True,
+            "storage_path": str(batch_storage.base_path),
+            **stats
+        }
+    }
+
+
+@router.post("/batch/process")
+async def trigger_batch_processing(
+    date: str = None,
+    background_tasks: BackgroundTasks = None
+):
+    """
+    Trigger batch processing della pipeline NLP per una data specifica.
+    Se date non specificata, processa i CV di oggi.
+    """
+    if background_tasks is None:
+        raise HTTPException(status_code=500, detail="Background tasks unavailable")
+    
+    process_date = date or datetime.now().strftime("%Y-%m-%d")
+    task_id = f"batch_{process_date}_{int(time.time())}"
+    
+    def _batch_processing():
+        try:
+            print(f"🚀 Avvio batch processing per data: {process_date}")
+            
+            # Import del batch processor
+            import subprocess
+            import sys
+            
+            # Path dello script batch processor
+            script_path = Path(__file__).parent.parent.parent / "batch_processor.py"
+            
+            if not script_path.exists():
+                raise FileNotFoundError(f"Batch processor script non trovato: {script_path}")
+            
+            # Esegui batch processing
+            result = subprocess.run([
+                sys.executable, str(script_path), 
+                "--process-date", process_date
+            ], capture_output=True, text=True, timeout=3600)  # 1 ora timeout
+            
+            if result.returncode == 0:
+                print(f"✅ Batch processing completato per {process_date}")
+                print(f"Output: {result.stdout}")
+            else:
+                print(f"❌ Batch processing fallito per {process_date}")
+                print(f"Errore: {result.stderr}")
+                
+        except Exception as e:
+            print(f"❌ Errore batch processing: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    background_tasks.add_task(_batch_processing)
+    
+    return JSONResponse(
+        status_code=202,
+        content={
+            "message": f"Batch processing avviato per {process_date}",
+            "task_id": task_id,
+            "date": process_date,
+            "status": "processing"
+        }
+    )
+
+
 MULTIPART_AVAILABLE = importlib.util.find_spec("multipart") is not None
 
 
@@ -169,6 +245,11 @@ if MULTIPART_AVAILABLE:
                                 pass
                     except Exception:
                         pass
+
+                    # Save to batch processing storage
+                    batch_storage = get_batch_storage()
+                    json_path = batch_storage.save_parsed_cv(doc, file.filename)
+                    print(f"📦 CV salvato per batch NLP: {json_path}")
 
                     # Store successful result
                     parsed_data = (
@@ -229,6 +310,11 @@ if MULTIPART_AVAILABLE:
                     except Exception:
                         # ignore malformed tags
                         pass
+
+                # Save to batch processing storage
+                batch_storage = get_batch_storage()
+                json_path = batch_storage.save_parsed_cv(doc, file.filename)
+                print(f"📦 CV salvato per batch NLP: {json_path}")
 
                 text_summary = display_parsing_results(doc)
                 parsed = (

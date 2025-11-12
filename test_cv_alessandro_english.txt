@@ -1,0 +1,117 @@
+Alessandro Ferrari
+DevOps Engineer & Cloud Architect
+
+CONTACT INFORMATION
+alessandro.ferrari@tech.com | +39 333 456 7890
+LinkedIn: linkedin.com/in/alessandroferrari | GitHub: github.com/alexferrari
+Location: Roma, Italia
+
+PROFESSIONAL SUMMARY
+
+Senior DevOps Engineer with 7+ years of experience in designing and managing scalable cloud infrastructures. Expert in Kubernetes, Docker, AWS, Terraform, and CI/CD pipelines. Specialized in implementing microservices architectures and SRE practices to ensure high availability and performance. Strong experience with monitoring, logging, and security in enterprise environments.
+
+WORK EXPERIENCE
+
+Senior DevOps Engineer
+CloudNative Solutions S.r.l., Roma
+January 2020 - Present (5+ years)
+
+• Design and management of multi-region AWS infrastructures for mission-critical applications
+• Implementation of Kubernetes clusters with EKS, Helm, and Istio service mesh
+• Deployment automation with Terraform, Ansible, and GitLab CI/CD
+• Monitoring stack setup with Prometheus, Grafana, AlertManager, and ELK Stack
+• Infrastructure as Code implementation reducing deploy time by 80%
+• Security compliance management with AWS Security Hub, Vault, and SOPS
+• Mentoring team of 5 junior engineers on DevOps best practices
+
+Cloud Infrastructure Engineer
+TechScale Italia, Milano
+June 2018 - December 2019 (1.5 years)
+
+• Migration of legacy applications to Google Cloud Platform and Azure
+• CI/CD pipeline implementation with Jenkins, Docker, and Kubernetes
+• Load balancers, auto-scaling, and disaster recovery configuration
+• Cloud cost optimization by 40% through rightsizing and reserved instances
+• Development of Python and Bash scripts for operational automation
+• Collaboration with development teams for application containerization
+
+System Administrator
+HostingPro S.r.l., Napoli
+March 2017 - May 2018 (1.2 years)
+
+• Administration of Linux servers (CentOS, Ubuntu) and Windows Server
+• Database management: PostgreSQL, MySQL, and MongoDB
+• Web server configuration: nginx, Apache, and Tomcat
+• Implementation of backup strategies and disaster recovery procedures
+• Network configuration with pfSense, VLANs, and VPN
+• 24/7 on-call support for critical systems
+
+TECHNICAL SKILLS
+
+Cloud Platforms: AWS (EC2, EKS, S3, RDS, Lambda, CloudFormation, IAM, VPC, Route53), Google Cloud (GKE, Cloud Run, BigQuery, Cloud Storage), Azure (AKS, App Services, SQL Database, Key Vault)
+
+Containers & Orchestration: Docker, Podman, Kubernetes, Helm, Istio
+
+Infrastructure as Code: Terraform, Ansible, CloudFormation, Pulumi
+
+CI/CD & Version Control: GitLab CI/CD, GitHub Actions, Jenkins, ArgoCD, Flux, Git, Nexus, Harbor
+
+Monitoring & Logging: Prometheus, Grafana, ELK Stack (Elasticsearch, Logstash, Kibana), Fluentd, Fluent Bit, Jaeger, Zipkin, New Relic, Datadog
+
+Programming & Scripting: Python, Bash, Shell, Go, JavaScript, Node.js, YAML, JSON
+
+Databases & Storage: PostgreSQL, MySQL, MongoDB, Redis, AWS S3, GCS, Azure Blob, NFS, Ceph
+
+Security & Compliance: Vault, SOPS, OAuth, SAML, OIDC, GDPR, SOC2, ISO27001, Trivy, Clair
+
+Operating Systems & Networking: Linux (Ubuntu, CentOS, RHEL, Alpine), TCP/IP, DNS, Load Balancers, CDN, VPN (WireGuard, OpenVPN, IPSec), Firewall (iptables, Security Groups, NSGs)
+
+EDUCATION
+
+Bachelor's Degree in Computer Engineering
+Università La Sapienza, Roma
+2014 - 2017
+Grade: 105/110
+Thesis: "Orchestration of microservices in cloud-native environments"
+
+High School Diploma in Computer Science
+ITIS Galileo Galilei, Roma
+2009 - 2014
+Grade: 92/100
+
+CERTIFICATIONS
+
+AWS Certified Solutions Architect - Professional (2024)
+Certified Kubernetes Administrator - CKA (2023)
+Certified Kubernetes Application Developer - CKAD (2023)
+HashiCorp Certified: Terraform Associate (2022)
+Google Cloud Professional DevOps Engineer (2022)
+Red Hat Certified System Administrator - RHCSA (2021)
+
+PROJECTS & ACHIEVEMENTS
+
+Open Source Contributions:
+• Kubernetes Operator for automated PostgreSQL backups (200+ stars on GitHub)
+• Contributor to Terraform AWS Provider (5+ merged PRs)
+• Helm Charts for common applications in CNCF ecosystem
+
+Speaking & Community:
+• KubeCon Europe 2024: "Cost Optimization in Large-Scale Kubernetes"
+• DevOps Days Italia 2023: "GitOps best practices with ArgoCD"
+• Organizer of "DevOps Roma" meetup (500+ members)
+
+Key Results:
+• Reduced downtime to 99.5% through SRE practices implementation
+• Migrated 200+ microservices from VMs to Kubernetes without interruptions
+• Complete infrastructure provisioning automation reducing errors by 90%
+• Multi-cloud disaster recovery setup with RTO under 15 minutes
+
+LANGUAGES
+
+Italian: Native (C2)
+English: Fluent (C1) - Cambridge FCE Certificate
+Spanish: Intermediate (B1)
+
+INTERESTS
+
+Cloud Native Technologies, Site Reliability Engineering, Automation, Open Source, Cybersecurity, Trekking, Photography, Cooking, Football
