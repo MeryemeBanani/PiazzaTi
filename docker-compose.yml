@@ -72,7 +72,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - ./NLP/data:/app/NLP/data
+      - /var/lib/docker/piazzati-data:/app/NLP/data
     depends_on:
       postgres:
         condition: service_healthy
