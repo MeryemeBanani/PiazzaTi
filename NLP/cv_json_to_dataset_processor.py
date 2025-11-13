@@ -401,6 +401,8 @@ def process_files(input_dir: str, output_dir: str, output_file: str):
     input_path = Path(input_dir)
     output_path = Path(output_dir)
     full_output_path = output_path / output_file
+    processed_folder = input_path.parent / "cvs_processed"
+    processed_folder.mkdir(exist_ok=True)
 
     if not input_path.exists():
         print(f"Errore: cartella {input_dir} non trovata")
@@ -484,8 +486,6 @@ def process_files(input_dir: str, output_dir: str, output_file: str):
 
     if not files_to_add and not files_to_update:
         print("\nNessun file da processare")
-        # if removed_count > 0:
-        #     print(f"Dataset aggiornato: {removed_count} righe eliminate")
         return True
 
     rows_to_add = []
@@ -505,6 +505,9 @@ def process_files(input_dir: str, output_dir: str, output_file: str):
 
                 user_id = row['user_id'] or 'N/A'
                 print(f"  {json_file.name} -> {user_id}")
+
+                # Sposta il file in cvs_processed
+                json_file.rename(processed_folder / json_file.name)
 
             except Exception as e:
                 errors.append((json_file.name, str(e)))
