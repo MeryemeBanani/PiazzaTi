@@ -529,6 +529,9 @@ def process_files(input_dir: str, output_dir: str, output_file: str):
 
                 print(f"  {json_file.name} -> {user_id}")
 
+                # Sposta il file in cvs_processed SOLO dopo averlo letto
+                json_file.rename(processed_folder / json_file.name)
+
             except Exception as e:
                 errors.append((json_file.name, str(e)))
                 print(f"  ERRORE: {json_file.name} - {e}")
