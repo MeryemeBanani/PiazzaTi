@@ -21,8 +21,8 @@ class CVBatchStorage:
     """
     
     def __init__(self):
-        # Path base per i JSON del modulo NLP - ora su volume persistente Scaleway
-        self.base_path = Path("/var/lib/docker/piazzati-data/cvs")
+        # Path base per i JSON del modulo NLP - ora compatibile con volume Docker
+        self.base_path = Path("/app/NLP/data/cvs")
         self.base_path.mkdir(parents=True, exist_ok=True)
         print(f"📁 CVBatchStorage inizializzato: {self.base_path}")
     
