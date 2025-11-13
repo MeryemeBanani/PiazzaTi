@@ -13,7 +13,7 @@ from datetime import datetime
 import pandas as pd
 
 
-INPUT_FOLDER = "data/cvs"
+INPUT_FOLDER = "/var/lib/docker/piazzati-data/cvs"
 OUTPUT_FOLDER = "Dataset"
 OUTPUT_FILENAME = "cv_dataset.csv"
 
