@@ -21,7 +21,7 @@ class CVBatchStorage:
     """
     
     def __init__(self):
-        # Path base per i JSON del modulo NLP - ora compatibile con volume Docker
+        # Path base per i JSON del modulo NLP - tutti i file in /app/NLP/data/cvs
         self.base_path = Path("/app/NLP/data/cvs")
         self.base_path.mkdir(parents=True, exist_ok=True)
         print(f"📁 CVBatchStorage inizializzato: {self.base_path}")
@@ -41,12 +41,8 @@ class CVBatchStorage:
             # Genera metadata per il file
             file_info = self._generate_file_info(doc, original_filename)
             
-            # Crea la struttura per data
-            date_folder = self._get_date_folder()
-            date_folder.mkdir(exist_ok=True)
-            
-            # Path completo del file JSON
-            json_path = date_folder / file_info["filename"]
+            # Salva direttamente nella cartella base
+            json_path = self.base_path / file_info["filename"]
             
             # Prepara i dati per il salvataggio
             cv_data = self._prepare_cv_data(doc, file_info)
@@ -90,10 +86,7 @@ class CVBatchStorage:
             "original_filename": original_filename
         }
     
-    def _get_date_folder(self) -> Path:
-        """Ottieni cartella per la data corrente."""
-        today = datetime.now().strftime("%Y-%m-%d")
-        return self.base_path / today
+    # Rimossa logica sottocartelle per data
     
     def _sanitize_filename(self, filename: str) -> str:
         """Pulisce il nome file rimuovendo caratteri non sicuri."""
@@ -144,84 +137,54 @@ class CVBatchStorage:
         return cv_data
     
     def get_batch_stats(self) -> Dict[str, Any]:
-        """Ottieni statistiche sui CV salvati per batch processing."""
+        """Ottieni statistiche sui CV salvati per batch processing (senza sottocartelle per data)."""
         stats = {
             "total_files": 0,
-            "files_by_date": {},
             "files_by_user": {},
             "latest_files": [],
             "processing_ready": 0
         }
-        
         try:
-            # Scansiona tutte le cartelle per data
-            for date_folder in self.base_path.iterdir():
-                if not date_folder.is_dir():
+            json_files = list(self.base_path.glob("*.json"))
+            stats["total_files"] = len(json_files)
+            for json_file in json_files[-10:]:  # Ultimi 10 file
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    user_id = data.get('user_id', 'unknown')
+                    stats["files_by_user"][user_id] = stats["files_by_user"].get(user_id, 0) + 1
+                    if data.get('batch_metadata', {}).get('ready_for_batch', False):
+                        stats["processing_ready"] += 1
+                    stats["latest_files"].append({
+                        "filename": json_file.name,
+                        "user_id": user_id,
+                        "skills_count": len(data.get('skills', []))
+                    })
+                except Exception:
                     continue
-                    
-                json_files = list(date_folder.glob("*.json"))
-                stats["files_by_date"][date_folder.name] = len(json_files)
-                stats["total_files"] += len(json_files)
-                
-                # Analizza alcuni file per statistiche
-                for json_file in json_files[-5:]:  # Ultimi 5 per performance
-                    try:
-                        with open(json_file, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                            
-                        user_id = data.get('user_id', 'unknown')
-                        stats["files_by_user"][user_id] = stats["files_by_user"].get(user_id, 0) + 1
-                        
-                        if data.get('batch_metadata', {}).get('ready_for_batch', False):
-                            stats["processing_ready"] += 1
-                            
-                        stats["latest_files"].append({
-                            "filename": json_file.name,
-                            "user_id": user_id,
-                            "date": date_folder.name,
-                            "skills_count": len(data.get('skills', []))
-                        })
-                        
-                    except Exception:
-                        continue
-            
-            # Ordina files più recenti
-            stats["latest_files"].sort(key=lambda x: x["filename"], reverse=True)
-            stats["latest_files"] = stats["latest_files"][:10]  # Top 10
-            
         except Exception as e:
             print(f"❌ Errore calcolo statistiche batch: {e}")
-        
         return stats
     
     def cleanup_old_files(self, days_to_keep: int = 30) -> int:
         """
-        Pulisce file JSON più vecchi di N giorni.
+        Pulisce file JSON più vecchi di N giorni nella cartella base.
         Restituisce il numero di file rimossi.
         """
         removed_count = 0
         cutoff_date = datetime.now() - timedelta(days=days_to_keep)
-        
         try:
-            for date_folder in self.base_path.iterdir():
-                if not date_folder.is_dir():
-                    continue
-                    
+            for json_file in self.base_path.glob("*.json"):
                 try:
-                    folder_date = datetime.strptime(date_folder.name, "%Y-%m-%d")
-                    if folder_date < cutoff_date:
-                        # Rimuovi cartella intera
-                        import shutil
-                        shutil.rmtree(date_folder)
-                        removed_count += len(list(date_folder.glob("*.json")))
-                        print(f"🗑️ Rimossa cartella obsoleta: {date_folder.name}")
-                except ValueError:
-                    # Nome cartella non in formato data
+                    file_mtime = datetime.fromtimestamp(json_file.stat().st_mtime)
+                    if file_mtime < cutoff_date:
+                        json_file.unlink()
+                        removed_count += 1
+                        print(f"🗑️ Rimossa file obsoleto: {json_file.name}")
+                except Exception:
                     continue
-                    
         except Exception as e:
             print(f"❌ Errore cleanup file: {e}")
-        
         return removed_count
 
 

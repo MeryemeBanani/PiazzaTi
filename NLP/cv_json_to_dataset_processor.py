@@ -406,6 +406,8 @@ def process_files(input_dir: str, output_dir: str, output_file: str):
         print(f"Errore: cartella {input_dir} non trovata")
         return False
 
+    processed_folder = input_path.parent / "cvs_processed"
+    processed_folder.mkdir(exist_ok=True)
     json_files = list(input_path.glob("*.json"))
 
     if not json_files:
@@ -424,11 +426,10 @@ def process_files(input_dir: str, output_dir: str, output_file: str):
     else:
         print(f"  Nessun tag trovato nei JSON")
 
-    print(f"\nControllo utenti eliminati...")
-    active_user_ids = get_active_user_ids(input_path)
-    print(f"  Utenti attivi nei JSON: {len(active_user_ids)}")
-
-    removed_count = clean_deleted_users(full_output_path, active_user_ids)
+    # print(f"\nControllo utenti eliminati...")
+    # active_user_ids = get_active_user_ids(input_path)
+    # print(f"  Utenti attivi nei JSON: {len(active_user_ids)}")
+    # removed_count = clean_deleted_users(full_output_path, active_user_ids)
 
     print(f"\nControllo duplicati nel dataset esistente...")
     existing_sha256, user_id_to_index = get_existing_identifiers(full_output_path)
@@ -457,14 +458,20 @@ def process_files(input_dir: str, output_dir: str, output_file: str):
         elif sha256 and sha256 in existing_sha256:
             files_skipped_sha.append((json_file.name, user_id, sha256))
             print(f"  SKIP (SHA duplicato): {json_file.name}")
+            # Sposta il file in cvs_processed
+            json_file.rename(processed_folder / json_file.name)
 
         elif user_id and user_id in user_id_to_index:
             if sha256 and sha256 not in existing_sha256:
                 files_to_update.append((json_file, user_id, sha256, user_id_to_index[user_id]))
                 print(f"  UPDATE: {json_file.name} -> {user_id}")
+                # Sposta il file in cvs_processed
+                json_file.rename(processed_folder / json_file.name)
             else:
                 files_skipped_both.append((json_file.name, user_id, sha256))
                 print(f"  SKIP (duplicato): {json_file.name}")
+                # Sposta il file in cvs_processed
+                json_file.rename(processed_folder / json_file.name)
         else:
             files_to_add.append(json_file)
 
@@ -477,8 +484,8 @@ def process_files(input_dir: str, output_dir: str, output_file: str):
 
     if not files_to_add and not files_to_update:
         print("\nNessun file da processare")
-        if removed_count > 0:
-            print(f"Dataset aggiornato: {removed_count} righe eliminate")
+        # if removed_count > 0:
+        #     print(f"Dataset aggiornato: {removed_count} righe eliminate")
         return True
 
     rows_to_add = []
@@ -574,8 +581,8 @@ def process_files(input_dir: str, output_dir: str, output_file: str):
     print(f"\nCompletato: {full_output_path}")
     print(f"Nuove righe: {len(rows_to_add)}")
     print(f"Righe aggiornate: {len(rows_to_update)}")
-    if removed_count > 0:
-        print(f"Righe eliminate: {removed_count}")
+    # if removed_count > 0:
+    #     print(f"Righe eliminate: {removed_count}")
     print(f"Totale righe: {len(final_df)}")
     print(f"Colonne totali: {len(final_df.columns)} (di cui {len(tag_cols)} colonne tag)")
 
