@@ -34,8 +34,33 @@
   <div class="container">
     <h2>Inserisci una Job Description</h2>
     <form id="jdForm">
+      <label for="jd_id">ID JD</label>
+      <input type="text" id="jd_id" name="jd_id" placeholder="Generato automaticamente o manuale">
+
+      <label for="source_file">Source File</label>
+      <input type="text" id="source_file" name="source_file" placeholder="Nome file JD (opzionale)">
+
+      <label for="processed_at">Processed At</label>
+      <input type="text" id="processed_at" name="processed_at" placeholder="Data/Ora (opzionale)">
+
       <label for="title">Titolo</label>
       <input type="text" id="title" name="title" required>
+
+      <label for="department">Dipartimento</label>
+      <input type="text" id="department" name="department">
+
+      <label for="location_city">Città</label>
+      <input type="text" id="location_city" name="location_city">
+
+      <label for="location_country">Nazione</label>
+      <input type="text" id="location_country" name="location_country">
+
+      <label for="location_remote">Remote</label>
+      <select id="location_remote" name="location_remote">
+        <option value="">---</option>
+        <option value="Yes">Sì</option>
+        <option value="No">No</option>
+      </select>
 
       <label for="description">Descrizione</label>
       <textarea id="description" name="description" rows="3" required></textarea>
@@ -46,18 +71,35 @@
       <label for="nice_to_have">Nice to Have</label>
       <textarea id="nice_to_have" name="nice_to_have" rows="2"></textarea>
 
-      <label for="seniority">Seniority</label>
-      <select id="seniority" name="seniority">
-        <option value="junior">Junior</option>
-        <option value="mid">Mid</option>
-        <option value="senior">Senior</option>
-      </select>
+      <label for="constraints_visa">Visa</label>
+      <input type="text" id="constraints_visa" name="constraints_visa">
 
-      <label for="languages">Lingue</label>
-      <input type="text" id="languages" name="languages" placeholder="Es: Italiano (C2); Inglese (C1)">
+      <label for="constraints_relocation">Relocation</label>
+      <input type="text" id="constraints_relocation" name="constraints_relocation">
 
-      <label for="salary">Salario</label>
-      <input type="text" id="salary" name="salary" placeholder="Es: 35000-50000 EUR">
+      <label for="constraints_seniority">Seniority</label>
+      <input type="text" id="constraints_seniority" name="constraints_seniority">
+
+      <label for="constraints_languages">Lingue vincolo</label>
+      <input type="text" id="constraints_languages" name="constraints_languages">
+
+      <label for="dei_gender_target">DEI Gender Target</label>
+      <input type="text" id="dei_gender_target" name="dei_gender_target">
+
+      <label for="dei_underrepresented_target">DEI Underrepresented Target</label>
+      <input type="text" id="dei_underrepresented_target" name="dei_underrepresented_target">
+
+      <label for="salary_min">Salario Min</label>
+      <input type="text" id="salary_min" name="salary_min">
+
+      <label for="salary_max">Salario Max</label>
+      <input type="text" id="salary_max" name="salary_max">
+
+      <label for="salary_currency">Valuta</label>
+      <input type="text" id="salary_currency" name="salary_currency">
+
+      <label for="contract">Contratto</label>
+      <input type="text" id="contract" name="contract">
 
       <button type="submit">Salva JD come JSON</button>
     </form>
