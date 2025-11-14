@@ -41,7 +41,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(BASE_DIR / 'embed_generator.log'),
+        logging.FileHandler('/usr/local/lib/ollama/tmp/embed_generator.log'),
         logging.StreamHandler()
     ]
 )
@@ -189,17 +189,54 @@ def process_jd_dataset() -> Tuple[pd.DataFrame, Dict]:
     logger.info("Processing JD dataset")
 
     if not JD_INPUT.exists():
-        raise FileNotFoundError(f"JD dataset not found: {JD_INPUT}")
+        logger.warning(f"JD dataset not found: {JD_INPUT}")
+        # Restituisci DataFrame vuoto e stats nulle
+        empty_stats = {
+            "mean_norm": 0.0,
+            "std_norm": 0.0,
+            "min_norm": 0.0,
+            "max_norm": 0.0,
+            "quartiles": {"q25": 0.0, "q50": 0.0, "q75": 0.0},
+            "count": 0,
+            "empty_skipped": 0
+        }
+        return pd.DataFrame(), empty_stats
 
     df = pd.read_csv(JD_INPUT)
     logger.info(f"Loaded {len(df)} JDs")
 
+    if df.empty:
+        logger.warning("JD dataset is empty. Skipping embedding generation for JD.")
+        empty_stats = {
+            "mean_norm": 0.0,
+            "std_norm": 0.0,
+            "min_norm": 0.0,
+            "max_norm": 0.0,
+            "quartiles": {"q25": 0.0, "q50": 0.0, "q75": 0.0},
+            "count": 0,
+            "empty_skipped": 0
+        }
+        return df, empty_stats
+
     df['text_content'] = df.apply(concatenate_jd_fields, axis=1)
 
-    empty_mask = df['text_content'].str.strip() == ''
+    empty_mask = df['text_content'].astype(str).str.strip() == ''
     if empty_mask.any():
         logger.warning(f"Skipping {empty_mask.sum()} empty JDs")
         df = df[~empty_mask].reset_index(drop=True)
+
+    if df.empty:
+        logger.warning("All JD rows are empty after filtering. Skipping embedding generation for JD.")
+        empty_stats = {
+            "mean_norm": 0.0,
+            "std_norm": 0.0,
+            "min_norm": 0.0,
+            "max_norm": 0.0,
+            "quartiles": {"q25": 0.0, "q50": 0.0, "q75": 0.0},
+            "count": 0,
+            "empty_skipped": empty_mask.sum()
+        }
+        return df, empty_stats
 
     texts = df['text_content'].tolist()
     model = load_model()
