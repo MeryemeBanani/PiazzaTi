@@ -14,7 +14,8 @@ async def upload_jd(request: Request):
     try:
         jd_data = await request.json()
         print("[JD UPLOAD] Ricevuta richiesta:", jd_data, file=sys.stderr)
-        os.makedirs(INPUT_FOLDER, exist_ok=True)
+        if not os.path.exists(INPUT_FOLDER):
+            os.makedirs(INPUT_FOLDER, exist_ok=True)
         filename = f"jd_{uuid.uuid4().hex}.json"
         filepath = os.path.join(INPUT_FOLDER, filename)
         with open(filepath, "w", encoding="utf-8") as f:
