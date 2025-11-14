@@ -321,6 +321,13 @@ def normalize_cv_dataset(input_path: Path, output_path: Path, ontology: SkillOnt
     df = pd.read_csv(input_path)
     print(f"Righe caricate: {len(df)}\n")
 
+    if len(df) == 0:
+        print("CV dataset vuoto: nessuna normalizzazione necessaria.")
+        print(f"Salvataggio: {output_path}")
+        df.to_csv(output_path, index=False)
+        print(f"Salvato\n")
+        return df
+
     print("Normalizzazione skills...")
     df['skills_normalized'] = df['skills'].apply(
         lambda x: normalize_skills_string(x, ontology)
@@ -405,6 +412,13 @@ def normalize_jd_dataset(input_path: Path, output_path: Path, ontology: SkillOnt
     print(f"Caricamento: {input_path}")
     df = pd.read_csv(input_path)
     print(f"Righe caricate: {len(df)}\n")
+
+    if len(df) == 0:
+        print("JD dataset vuoto: nessuna normalizzazione necessaria.")
+        print(f"Salvataggio: {output_path}")
+        df.to_csv(output_path, index=False)
+        print(f"Salvato\n")
+        return df
 
     print("Normalizzazione requirements...")
     df['requirements_normalized'] = df['requirements'].apply(
