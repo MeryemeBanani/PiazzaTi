@@ -69,9 +69,10 @@
       <label for="constraints_relocation">Relocation</label>
       <input type="text" id="constraints_relocation" name="constraints_relocation">
 
+      
       <label for="constraints_seniority">Seniority</label>
-      <label for="constraints_seniority">Seniority</label>
-      <select id="constraints_seniority" name="constraints_seniority" multiple>
+      <select id="constraints_seniority" name="constraints_seniority">
+        <option value="">---</option>
         <option value="Junior">Junior</option>
         <option value="Mid">Mid</option>
         <option value="Senior">Senior</option>
@@ -82,9 +83,10 @@
         <option value="Altro">Altro</option>
       </select>
 
+     
       <label for="constraints_languages">Lingue vincolo</label>
-      <label for="constraints_languages">Lingue vincolo</label>
-      <select id="constraints_languages" name="constraints_languages" multiple>
+      <select id="constraints_languages" name="constraints_languages">
+        <option value="">---</option>
         <option value="Italiano(C1)">Italiano (C1)</option>
         <option value="Italiano(B2)">Italiano (B2)</option>
         <option value="Inglese(C1)">Inglese (C1)</option>
@@ -147,8 +149,8 @@
         nice_to_have: document.getElementById('nice_to_have').value,
         constraints_visa: document.getElementById('constraints_visa').value,
         constraints_relocation: document.getElementById('constraints_relocation').value,
-        constraints_seniority: Array.from(document.getElementById('constraints_seniority').selectedOptions).map(opt => opt.value).join(', '),
-        constraints_languages: Array.from(document.getElementById('constraints_languages').selectedOptions).map(opt => opt.value).join(', '),
+        constraints_seniority: document.getElementById('constraints_seniority').value,
+        constraints_languages: document.getElementById('constraints_languages').value,
         dei_gender_target: document.getElementById('dei_gender_target').value,
         dei_underrepresented_target: document.getElementById('dei_underrepresented_target').value,
         salary_min: document.getElementById('salary_min').value,
