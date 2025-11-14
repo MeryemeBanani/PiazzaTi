@@ -10,10 +10,25 @@
       h1{margin:0 0 8px;font-size:24px}
       p{margin:0 0 18px;color:#556}
       .buttons{display:flex;gap:12px;justify-content:center}
-      a.button, a.button.alt {
-        background: #ffb347 !important;
-        color: #fff !important;
-      }
+        a.button, a.button.alt {
+          display: inline-block;
+          padding: 14px 32px;
+          font-size: 18px;
+          font-weight: 500;
+          border-radius: 6px;
+          text-decoration: none;
+          color: #fff;
+          background: #ff9800;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+          transition: background 0.2s, box-shadow 0.2s;
+          border: none;
+          letter-spacing: 0.5px;
+          cursor: pointer;
+        }
+        a.button:hover, a.button.alt:hover {
+          background: #fb8c00;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
       footer{margin-top:16px;font-size:13px;color:#889}
     </style>
   </head>
