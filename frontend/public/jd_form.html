@@ -70,10 +70,33 @@
       <input type="text" id="constraints_relocation" name="constraints_relocation">
 
       <label for="constraints_seniority">Seniority</label>
-      <input type="text" id="constraints_seniority" name="constraints_seniority">
+      <label for="constraints_seniority">Seniority</label>
+      <select id="constraints_seniority" name="constraints_seniority" multiple>
+        <option value="Junior">Junior</option>
+        <option value="Mid">Mid</option>
+        <option value="Senior">Senior</option>
+        <option value="Lead">Lead</option>
+        <option value="Manager">Manager</option>
+        <option value="Director">Director</option>
+        <option value="C-level">C-level</option>
+        <option value="Altro">Altro</option>
+      </select>
 
       <label for="constraints_languages">Lingue vincolo</label>
-      <input type="text" id="constraints_languages" name="constraints_languages">
+      <label for="constraints_languages">Lingue vincolo</label>
+      <select id="constraints_languages" name="constraints_languages" multiple>
+        <option value="Italiano(C1)">Italiano (C1)</option>
+        <option value="Italiano(B2)">Italiano (B2)</option>
+        <option value="Inglese(C1)">Inglese (C1)</option>
+        <option value="Inglese(B2)">Inglese (B2)</option>
+        <option value="Francese(C1)">Francese (C1)</option>
+        <option value="Francese(B2)">Francese (B2)</option>
+        <option value="Spagnolo(C1)">Spagnolo (C1)</option>
+        <option value="Spagnolo(B2)">Spagnolo (B2)</option>
+        <option value="Tedesco(C1)">Tedesco (C1)</option>
+        <option value="Tedesco(B2)">Tedesco (B2)</option>
+        <option value="Altro">Altro</option>
+      </select>
 
       <label for="dei_gender_target">DEI Gender Target</label>
       <select id="dei_gender_target" name="dei_gender_target">
@@ -115,12 +138,23 @@
       e.preventDefault();
       const jd = {
         title: document.getElementById('title').value,
+        department: document.getElementById('department').value,
+        location_city: document.getElementById('location_city').value,
+        location_country: document.getElementById('location_country').value,
+        location_remote: document.getElementById('location_remote').value,
         description: document.getElementById('description').value,
         requirements: document.getElementById('requirements').value,
         nice_to_have: document.getElementById('nice_to_have').value,
-        seniority: document.getElementById('seniority').value,
-        languages: document.getElementById('languages').value,
-        salary: document.getElementById('salary').value
+        constraints_visa: document.getElementById('constraints_visa').value,
+        constraints_relocation: document.getElementById('constraints_relocation').value,
+        constraints_seniority: Array.from(document.getElementById('constraints_seniority').selectedOptions).map(opt => opt.value).join(', '),
+        constraints_languages: Array.from(document.getElementById('constraints_languages').selectedOptions).map(opt => opt.value).join(', '),
+        dei_gender_target: document.getElementById('dei_gender_target').value,
+        dei_underrepresented_target: document.getElementById('dei_underrepresented_target').value,
+        salary_min: document.getElementById('salary_min').value,
+        salary_max: document.getElementById('salary_max').value,
+        salary_currency: document.getElementById('salary_currency').value,
+        contract: document.getElementById('contract').value
       };
       fetch('/api/jd/upload', {
         method: 'POST',
