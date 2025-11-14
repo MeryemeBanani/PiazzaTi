@@ -110,8 +110,16 @@ def concatenate_jd_fields(row: pd.Series) -> str:
 
 
 def compute_drift_metrics(embeddings: np.ndarray) -> Dict:
-    norms = np.linalg.norm(embeddings, axis=1)
+    if embeddings is None or len(embeddings) == 0 or (hasattr(embeddings, 'shape') and embeddings.shape == (0,)):
+        return {
+            "mean_norm": 0.0,
+            "std_norm": 0.0,
+            "min_norm": 0.0,
+            "max_norm": 0.0,
+            "quartiles": {"q25": 0.0, "q50": 0.0, "q75": 0.0}
+        }
 
+    norms = np.linalg.norm(embeddings, axis=1)
     return {
         "mean_norm": float(np.mean(norms)),
         "std_norm": float(np.std(norms)),
