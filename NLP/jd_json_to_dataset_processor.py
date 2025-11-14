@@ -20,7 +20,7 @@ from datetime import datetime
 import pandas as pd
 
 
-INPUT_FOLDER = "data/jds"
+INPUT_FOLDER = "/var/lib/docker/piazzati-data/jds"
 OUTPUT_FOLDER = "Dataset"
 OUTPUT_FILENAME = "jd_dataset.csv"
 
@@ -224,7 +224,7 @@ def json_to_row(data: Dict, source_file: str) -> Dict:
     Trasforma un JSON JD in una riga del dataset.
     """
     row = {
-        'jd_id': data.get('jd_id', ''),
+        'jd_id': data.get('jd_id') or source_file.replace('.json', ''),
         'source_file': source_file,
         'processed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'title': data.get('title', ''),
