@@ -10,10 +10,15 @@ router = APIRouter()
 
 @router.post("/jd/upload")
 async def upload_jd(request: Request):
-    jd_data = await request.json()
-    os.makedirs(INPUT_FOLDER, exist_ok=True)
-    filename = f"jd_{uuid.uuid4().hex}.json"
-    filepath = os.path.join(INPUT_FOLDER, filename)
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(jd_data, f, ensure_ascii=False, indent=2)
-    return JSONResponse({"status": "ok", "filename": filename})
+    try:
+        jd_data = await request.json()
+        os.makedirs(INPUT_FOLDER, exist_ok=True)
+        filename = f"jd_{uuid.uuid4().hex}.json"
+        filepath = os.path.join(INPUT_FOLDER, filename)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(jd_data, f, ensure_ascii=False, indent=2)
+        return JSONResponse({"status": "ok", "filename": filename})
+    except PermissionError as e:
+        return JSONResponse({"status": "error", "detail": "Permission denied", "message": str(e)}, status_code=500)
+    except Exception as e:
+        return JSONResponse({"status": "error", "detail": "Unexpected error", "message": str(e)}, status_code=500)
