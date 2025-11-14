@@ -34,14 +34,6 @@
   <div class="container">
     <h2>Inserisci una Job Description</h2>
     <form id="jdForm">
-      <label for="jd_id">ID JD</label>
-      <input type="text" id="jd_id" name="jd_id" placeholder="Generato automaticamente o manuale">
-
-      <label for="source_file">Source File</label>
-      <input type="text" id="source_file" name="source_file" placeholder="Nome file JD (opzionale)">
-
-      <label for="processed_at">Processed At</label>
-      <input type="text" id="processed_at" name="processed_at" placeholder="Data/Ora (opzionale)">
 
       <label for="title">Titolo</label>
       <input type="text" id="title" name="title" required>
@@ -84,10 +76,23 @@
       <input type="text" id="constraints_languages" name="constraints_languages">
 
       <label for="dei_gender_target">DEI Gender Target</label>
-      <input type="text" id="dei_gender_target" name="dei_gender_target">
+      <select id="dei_gender_target" name="dei_gender_target">
+        <option value="">---</option>
+        <option value="none">Nessuna preferenza</option>
+        <option value="female">Donne</option>
+        <option value="male">Uomini</option>
+        <option value="other">Altro</option>
+      </select>
 
       <label for="dei_underrepresented_target">DEI Underrepresented Target</label>
-      <input type="text" id="dei_underrepresented_target" name="dei_underrepresented_target">
+      <select id="dei_underrepresented_target" name="dei_underrepresented_target">
+        <option value="">---</option>
+        <option value="none">Nessuna preferenza</option>
+        <option value="ethnic_minorities">Minoranze etniche</option>
+        <option value="disabilities">Persone con disabilità</option>
+        <option value="refugees">Rifugiati</option>
+        <option value="other">Altro</option>
+      </select>
 
       <label for="salary_min">Salario Min</label>
       <input type="text" id="salary_min" name="salary_min">
