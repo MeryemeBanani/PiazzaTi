@@ -1,10 +1,11 @@
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 import os
 import uuid
 import json
 
-INPUT_FOLDER = "/var/lib/docker/piazzati-data/jds"
+INPUT_FOLDER = "/app/NLP/data/jds"
 
 router = APIRouter()
 
