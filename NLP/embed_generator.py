@@ -110,6 +110,7 @@ def concatenate_jd_fields(row: pd.Series) -> str:
 
 
 def compute_drift_metrics(embeddings: np.ndarray) -> Dict:
+
     if embeddings is None or len(embeddings) == 0 or (hasattr(embeddings, 'shape') and embeddings.shape == (0,)):
         return {
             "mean_norm": 0.0,
@@ -166,7 +167,7 @@ def process_cv_dataset() -> Tuple[pd.DataFrame, Dict]:
     df = pd.read_csv(CV_INPUT)
     logger.info(f"Loaded {len(df)} CVs")
 
-    df['text_content'] = df.apply(concatenate_jd_fields, axis=1)
+    df['text_content'] = df.apply(concatenate_cv_fields, axis=1)
 
     # Gestione robusta anche per DataFrame vuoti
     if 'text_content' in df.columns:

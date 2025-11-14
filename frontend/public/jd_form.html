@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Inserisci una Job Description</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f7f7f7; }
+    .container { max-width: 600px; margin: 40px auto; background: #fff; padding: 32px; border-radius: 8px; box-shadow: 0 2px 8px #ccc; }
+    h2 { text-align: center; }
+    label { display: block; margin-top: 16px; }
+    input, textarea, select { width: 100%; padding: 8px; margin-top: 4px; border-radius: 4px; border: 1px solid #ccc; }
+    button { margin-top: 24px; padding: 12px 24px; background: #0078d4; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+    button:hover { background: #005fa3; }
+    .success { color: green; text-align: center; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Inserisci una Job Description</h2>
+    <form id="jdForm">
+      <label for="title">Titolo</label>
+      <input type="text" id="title" name="title" required>
+
+      <label for="description">Descrizione</label>
+      <textarea id="description" name="description" rows="3" required></textarea>
+
+      <label for="requirements">Requisiti</label>
+      <textarea id="requirements" name="requirements" rows="2"></textarea>
+
+      <label for="nice_to_have">Nice to Have</label>
+      <textarea id="nice_to_have" name="nice_to_have" rows="2"></textarea>
+
+      <label for="seniority">Seniority</label>
+      <select id="seniority" name="seniority">
+        <option value="junior">Junior</option>
+        <option value="mid">Mid</option>
+        <option value="senior">Senior</option>
+      </select>
+
+      <label for="languages">Lingue</label>
+      <input type="text" id="languages" name="languages" placeholder="Es: Italiano (C2); Inglese (C1)">
+
+      <label for="salary">Salario</label>
+      <input type="text" id="salary" name="salary" placeholder="Es: 35000-50000 EUR">
+
+      <button type="submit">Salva JD come JSON</button>
+    </form>
+    <div id="successMsg" class="success" style="display:none;">JD salvata come JSON!</div>
+  </div>
+  <script>
+    document.getElementById('jdForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const jd = {
+        title: document.getElementById('title').value,
+        description: document.getElementById('description').value,
+        requirements: document.getElementById('requirements').value,
+        nice_to_have: document.getElementById('nice_to_have').value,
+        seniority: document.getElementById('seniority').value,
+        languages: document.getElementById('languages').value,
+        salary: document.getElementById('salary').value
+      };
+      fetch('/api/jd/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(jd)
+      })
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById('successMsg').style.display = 'block';
+        setTimeout(() => { document.getElementById('successMsg').style.display = 'none'; }, 3000);
+      });
+    });
+  </script>
+</body>
+</html>

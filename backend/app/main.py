@@ -5,6 +5,7 @@ import os
 # being on sys.path during development/runtime).
 from .api.parse import router as parse_router
 from .api.embeddings import router as embeddings_router
+from .api.jd import router as jd_router
 from .database import get_db
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -47,6 +48,9 @@ app.include_router(parse_router, prefix="/api")
 
 # Register embeddings API router (CSV processing & similarity search)
 app.include_router(embeddings_router, prefix="/api")
+
+# Register JD API router (JSON data upload)
+app.include_router(jd_router, prefix="/api")
 
 # Instrument FastAPI automatically (per tracciare le richieste)
 FastAPIInstrumentor.instrument_app(app)
