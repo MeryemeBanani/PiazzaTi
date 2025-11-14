@@ -158,11 +158,15 @@ def process_cv_dataset() -> Tuple[pd.DataFrame, Dict]:
     df = pd.read_csv(CV_INPUT)
     logger.info(f"Loaded {len(df)} CVs")
 
-    df['text_content'] = df.apply(concatenate_cv_fields, axis=1)
+    df['text_content'] = df.apply(concatenate_jd_fields, axis=1)
 
-    empty_mask = df['text_content'].str.strip() == ''
+    # Gestione robusta anche per DataFrame vuoti
+    if 'text_content' in df.columns:
+        empty_mask = df['text_content'].astype(str).str.strip() == ''
+    else:
+        empty_mask = pd.Series([], dtype=bool)
     if empty_mask.any():
-        logger.warning(f"Skipping {empty_mask.sum()} empty CVs")
+        logger.warning(f"Skipping {empty_mask.sum()} empty JDs")
         df = df[~empty_mask].reset_index(drop=True)
 
     texts = df['text_content'].tolist()
