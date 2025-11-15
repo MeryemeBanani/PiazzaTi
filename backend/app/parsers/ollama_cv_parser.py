@@ -1,21 +1,16 @@
-import hashlib
-import json
-import re
-import uuid
-from datetime import datetime
-from pathlib import Path
-from typing import List, Optional
-import os
-import shutil
-import requests
+"""
+===============================================================================
+CELLA 5: CV PARSER v1.7.4 FINAL - ENHANCED DESCRIPTION GENERATION
+===============================================================================
 
-# LangChain (optional)
-try:
-    from langchain_ollama import OllamaLLM as Ollama
-except Exception:
-    Ollama = None  # type: ignore
+"""
 
-# Schemas (Pydantic models used by the parser)
+
+# =====================
+# PATCH: COMPATIBILITÀ CODEBASE
+# =====================
+
+# Import modelli Pydantic
 from ..schemas.parsed_document import (
     Certification,
     DocumentType,
@@ -29,6 +24,44 @@ from ..schemas.parsed_document import (
     Span,
 )
 
+# Import LLM client con fallback
+try:
+    from langchain_ollama import OllamaLLM as Ollama
+except Exception:
+    try:
+        from langchain_community.llms import Ollama
+    except Exception:
+        Ollama = None
+
+import os
+import time
+import re
+import json
+import uuid
+import hashlib
+from pathlib import Path
+from typing import Optional, Dict, List, Tuple, Set
+from datetime import datetime
+
+print("="*80)
+print("STEP 5: Creating Parser v1.7.4 FINAL (Complete)")
+print("="*80)
+
+# ========================================================================
+# IMPORTS
+# ========================================================================
+import time
+import re
+import json
+import uuid
+import hashlib
+from pathlib import Path
+from typing import Optional, Dict, List, Tuple, Set
+from datetime import datetime
+
+# LangChain
+from langchain_community.llms import Ollama
+
 # ========================================================================
 # PARSER CLASS
 # ========================================================================
@@ -37,37 +70,27 @@ from ..schemas.parsed_document import (
 class OllamaCVParser:
     """Parser v1.7.4 with enhanced description generation."""
 
-    def __init__(
-        self, model: str = "llama3.2:3b", base_url: str = None
-    ):
-        import os
-        
+    def __init__(self, model: str = "llama3.1:8b", base_url: str = None):
         self.model = model
-        # Use environment variable OLLAMA_BASE_URL if available, fallback to parameter or default
         self.base_url = (
-            base_url or 
-            os.getenv("OLLAMA_BASE_URL") or 
-            "http://localhost:11434"
+            base_url or os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434"
         )
-
-        print("Initializing parser v1.7.4 FINAL...")
+        print(f"Initializing parser v1.7.4 FINAL...")
         print(f"  Using Ollama base_url: {self.base_url}")
-
-        # Instantiate LLM client if available;
+        # Instanzia LLM client se disponibile
         if Ollama is not None:
             try:
                 self.llm = Ollama(
                     model=model,
-                    base_url=self.base_url,  # Use self.base_url instead of parameter
+                    base_url=self.base_url,
                     temperature=0.0,
-                    num_predict=512,
+                    num_predict=12000,
                     top_k=10,
                     top_p=0.9,
                     repeat_penalty=1.1,
                 )
                 print(f"  ✅ LLM client initialized successfully (model: {model})")
             except Exception as e:
-                # Fail gracefully: log and keep llm unset
                 print(f"  ❌ Failed to initialize Ollama client: {e}")
                 self.llm = None
         else:
@@ -77,190 +100,67 @@ class OllamaCVParser:
         self._init_language_database()
         self._init_certification_database()
         self._init_skill_keywords()
+        print(f"SUCCESS: Parser v1.7.4 FINAL ready")
 
-        print("SUCCESS: Parser v1.7.4 FINAL ready")
-
-    def _call_llm(self, prompt: str, timeout: int = 600, retries: int = 2) -> str:
-        """Call Ollama directly with a configurable timeout and simple retries.
-
-        This avoids relying on the underlying client library's default timeout
-        and gives the server more time for long completions.
-        Returns the raw text response from the model.
-        """
-        url = f"{self.base_url.rstrip('/')}/api/generate"
-        payload = {
-            "model": self.model,
-            "prompt": prompt,
-            "stream": False,
-        }
-
-        last_err = None
-        for attempt in range(1, retries + 1):
-            try:
-                resp = requests.post(url, json=payload, timeout=timeout)
-                if resp.status_code != 200:
-                    last_err = Exception(f"Ollama returned {resp.status_code}: {resp.text}")
-                    # small backoff
-                    if attempt < retries:
-                        import time
-
-                        time.sleep(1 * attempt)
-                    continue
-
-                result = resp.json()
-                # Ollama responses can vary; try common keys
-                if isinstance(result, dict):
-                    if "response" in result:
-                        return result.get("response") or ""
-                    # older/newer formats
-                    if "results" in result and isinstance(result["results"], list) and len(result["results"])>0:
-                        # try to extract text from first result
-                        first = result["results"][0]
-                        if isinstance(first, dict) and "response" in first:
-                            return first.get("response") or ""
-                        # fallback to stringifying
-                        return json.dumps(result)
-
-                # fallback: return raw text
-                return resp.text
-
-            except Exception as e:
-                last_err = e
-                if attempt < retries:
-                    import time
-
-                    time.sleep(1 * attempt)
-                else:
-                    break
-
-        raise last_err or Exception("Unknown Ollama error")
 
     def _init_language_database(self):
         """Language database."""
         self.language_database = {
-            "italiano": ("Italiano", "it"),
-            "italian": ("Italian", "it"),
-            "inglese": ("Inglese", "en"),
-            "english": ("English", "en"),
-            "francese": ("Francese", "fr"),
-            "french": ("French", "fr"),
-            "spagnolo": ("Spagnolo", "es"),
-            "spanish": ("Spanish", "es"),
-            "tedesco": ("Tedesco", "de"),
-            "german": ("German", "de"),
-            "portoghese": ("Portoghese", "pt"),
-            "portuguese": ("Portuguese", "pt"),
-            "cinese": ("Cinese", "zh"),
-            "chinese": ("Chinese", "zh"),
-            "giapponese": ("Giapponese", "ja"),
-            "japanese": ("Japanese", "ja"),
-            "russo": ("Russo", "ru"),
-            "russian": ("Russian", "ru"),
-            "arabo": ("Arabo", "ar"),
-            "arabic": ("Arabic", "ar"),
+            'italiano': ('Italiano', 'it'), 'italian': ('Italian', 'it'),
+            'inglese': ('Inglese', 'en'), 'english': ('English', 'en'),
+            'francese': ('Francese', 'fr'), 'french': ('French', 'fr'),
+            'spagnolo': ('Spagnolo', 'es'), 'spanish': ('Spanish', 'es'),
+            'tedesco': ('Tedesco', 'de'), 'german': ('German', 'de'),
+            'portoghese': ('Portoghese', 'pt'), 'portuguese': ('Portuguese', 'pt'),
+            'cinese': ('Cinese', 'zh'), 'chinese': ('Chinese', 'zh'),
+            'giapponese': ('Giapponese', 'ja'), 'japanese': ('Japanese', 'ja'),
+            'russo': ('Russo', 'ru'), 'russian': ('Russian', 'ru'),
+            'arabo': ('Arabo', 'ar'), 'arabic': ('Arabic', 'ar'),
         }
+
 
     def _init_skill_keywords(self):
         """Skill keywords (only technical)."""
         self.skill_keywords = {
             # Healthcare
-            "pals",
-            "bls",
-            "blsd",
-            "bls-d",
-            "acls",
-            "nrp",
-            "ecmo",
-            "picc",
-            "cvc",
-            "ventilazione",
-            "intubazione",
-            "monitoraggio emodinamico",
-            "rianimazione",
-            "chemioterapia",
-            "ecg",
-            "cpap",
+            'pals', 'bls', 'blsd', 'bls-d', 'acls', 'nrp', 'ecmo',
+            'picc', 'cvc', 'ventilazione', 'intubazione',
+            'monitoraggio emodinamico', 'rianimazione',
+            'chemioterapia', 'ecg', 'cpap',
             # IT
-            "python",
-            "java",
-            "javascript",
-            "react",
-            "vue",
-            "angular",
-            "node.js",
-            "django",
-            "fastapi",
-            "flask",
-            "docker",
-            "kubernetes",
-            "aws",
-            "azure",
-            "gcp",
-            "sql",
-            "postgresql",
-            "mongodb",
-            "redis",
-            "git",
-            "ci/cd",
-            "jenkins",
-            "github actions",
-            "autocad",
-            "revit",
-            "archicad",
-            "sketchup",
-            "photoshop",
-            "illustrator",
-            "indesign",
+            'python', 'java', 'javascript', 'react', 'vue', 'angular',
+            'node.js', 'django', 'fastapi', 'flask',
+            'docker', 'kubernetes', 'aws', 'azure', 'gcp',
+            'sql', 'postgresql', 'mongodb', 'redis',
+            'git', 'ci/cd', 'jenkins', 'github actions',
+            'autocad', 'revit', 'archicad', 'sketchup', 'photoshop',
+            'illustrator', 'indesign',
             # Marketing
-            "seo",
-            "sem",
-            "google ads",
-            "facebook ads",
-            "meta ads",
-            "google analytics",
-            "ga4",
-            "hubspot",
-            "mailchimp",
-            "wordpress",
-            "shopify",
+            'seo', 'sem', 'google ads', 'facebook ads', 'meta ads',
+            'google analytics', 'ga4', 'hubspot', 'mailchimp',
+            'wordpress', 'shopify'
         }
 
         self.soft_skills_exclude = {
-            "gestione stress",
-            "decision-making",
-            "empatia",
-            "comunicazione",
-            "leadership",
-            "lavoro di squadra",
-            "team work",
-            "problem solving",
-            "attenzione ai dettagli",
-            "flessibilità",
-            "organizzazione",
+            'gestione stress', 'decision-making', 'empatia',
+            'comunicazione', 'leadership', 'lavoro di squadra',
+            'team work', 'problem solving', 'attenzione ai dettagli',
+            'flessibilità', 'organizzazione'
         }
+
 
     def _init_certification_database(self):
         """Certification database."""
         self.certification_db = {
-            "pals": {
-                "full_name": "PALS (Pediatric Advanced Life Support)",
-                "issuer": "AHA",
-            },
-            "bls": {"full_name": "BLS (Basic Life Support)", "issuer": "AHA"},
-            "blsd": {
-                "full_name": "BLS-D (Basic Life Support & Defibrillation)",
-                "issuer": "AHA",
-            },
-            "nrp": {
-                "full_name": "NRP (Neonatal Resuscitation Program)",
-                "issuer": "AAP",
-            },
-            "acls": {
-                "full_name": "ACLS (Advanced Cardiovascular Life Support)",
-                "issuer": "AHA",
-            },
-            "ecmo": {"full_name": "ECMO Specialist", "issuer": "ELSO"},
+            'pals': {'full_name': 'PALS (Pediatric Advanced Life Support)', 'issuer': 'AHA'},
+            'bls': {'full_name': 'BLS (Basic Life Support)', 'issuer': 'AHA'},
+            'blsd': {'full_name': 'BLS-D (Basic Life Support & Defibrillation)', 'issuer': 'AHA'},
+            'nrp': {'full_name': 'NRP (Neonatal Resuscitation Program)', 'issuer': 'AAP'},
+            'acls': {'full_name': 'ACLS (Advanced Cardiovascular Life Support)', 'issuer': 'AHA'},
+            'ecmo': {'full_name': 'ECMO Specialist', 'issuer': 'ELSO'},
         }
+
+
 
     def parse(self, file_path: str) -> ParsedDocument:
         """Parse CV with automatic format detection."""
@@ -284,7 +184,7 @@ class OllamaCVParser:
         # Clean OCR text
         print("\n[1.5/16] Cleaning OCR...")
         full_text = self._clean_ocr_text(full_text)
-        print("✓ Cleaned")
+        print(f"✓ Cleaned")
 
         # Detect format
         print("\n[2/16] Format detection...")
@@ -299,20 +199,17 @@ class OllamaCVParser:
             extracted_data = self._extract_with_robust_llm(full_text)
 
         # Step 3: Metadata
-        print("\n[3/16] Metadata...")
         extracted_data.document_id = str(uuid.uuid4())
         extracted_data.file_sha256 = file_hash
         extracted_data.file_name = file_path.name
         extracted_data.full_text = full_text
-        extracted_data.parsing_method = (
-            f"{'europass' if is_europass else 'standard'}_v1.7.4_{self.model}"
-        )
+        extracted_data.parsing_method = f"{'europass' if is_europass else 'standard'}_v1.7.4_{self.model}"
         extracted_data.parsed_at = datetime.now()
 
         # POST-PROCESSING
-        print("\n" + "=" * 80)
+        print("\n" + "="*80)
         print("POST-PROCESSING")
-        print("=" * 80)
+        print("="*80)
 
         self._run_postprocessing(extracted_data)
 
@@ -322,6 +219,7 @@ class OllamaCVParser:
 
         return extracted_data
 
+
     # ========================================================================
     # OCR TEXT CLEANING
     # ========================================================================
@@ -329,26 +227,17 @@ class OllamaCVParser:
     def _clean_ocr_text(self, text: str) -> str:
         """Clean OCR text (fix encoding errors)."""
         replacements = {
-            'â€"': "-",
-            "â€˜": "'",
-            "â€™": "'",
-            "â€œ": '"',
-            "â€": '"',
-            "Ã©": "é",
-            "Ã¨": "è",
-            "Ã ": "à",
-            "Ã²": "ò",
-            "Ã¹": "ù",
-            "Ã¬": "ì",
-            "Ã€": "À",
-            "Ã‰": "É",
-            "Ãˆ": "È",
+            'â€"': '-', 'â€"': '-', 'â€˜': "'", 'â€™': "'",
+            'â€œ': '"', 'â€': '"',
+            'Ã©': 'é', 'Ã¨': 'è', 'Ã ': 'à', 'Ã²': 'ò', 'Ã¹': 'ù', 'Ã¬': 'ì',
+            'Ã€': 'À', 'Ã‰': 'É', 'Ãˆ': 'È',
         }
 
         for old, new in replacements.items():
             text = text.replace(old, new)
 
         return text
+
 
     # ========================================================================
     # EUROPASS FORMAT DETECTION
@@ -359,23 +248,19 @@ class OllamaCVParser:
         text_lower = text.lower()
 
         strong_indicators = [
-            "formato europeo",
-            "curriculum vitae europeo",
-            "europass",
-            "informazioni personali",
+            'formato europeo',
+            'curriculum vitae europeo',
+            'europass',
+            'informazioni personali'
         ]
 
         strong_count = sum(1 for ind in strong_indicators if ind in text_lower)
 
-        field_labels = [
-            "* date (da",
-            "* nome e indirizzo",
-            "* tipo di azienda",
-            "* tipo di impiego",
-        ]
+        field_labels = ['* date (da', '* nome e indirizzo', '* tipo di azienda', '* tipo di impiego']
         field_count = sum(1 for label in field_labels if label in text_lower)
 
         return strong_count >= 1 or field_count >= 2
+
 
     # ========================================================================
     # EUROPASS CV PARSER
@@ -405,114 +290,109 @@ class OllamaCVParser:
         print("      ✓ Europass parsing complete")
         return doc
 
+
     def _extract_europass_personal_info(self, text: str) -> PersonalInfo:
         """Extract personal info from Europass."""
         info = PersonalInfo()
 
         section_match = re.search(
-            r"INFORMAZIONI PERSONALI(.*?)(?:ESPERIENZA LAVORATIVA|ISTRUZIONE)",
+            r'INFORMAZIONI PERSONALI(.*?)(?:ESPERIENZA LAVORATIVA|ISTRUZIONE)',
             text,
-            re.IGNORECASE | re.DOTALL,
+            re.IGNORECASE | re.DOTALL
         )
 
         if not section_match:
             return info
 
         section = section_match.group(1)
-        lines = section.split("\n")
+        lines = section.split('\n')
 
         for i, line in enumerate(lines):
             line = line.strip()
 
-            if line.lower() == "nome" and i + 1 < len(lines):
+            if line.lower() == 'nome' and i + 1 < len(lines):
                 name = lines[i + 1].strip()
                 if name and len(name) > 3:
                     info.full_name = name
 
-            if line.lower() == "e-mail" and i + 1 < len(lines):
+            if line.lower() == 'e-mail' and i + 1 < len(lines):
                 email = lines[i + 1].strip()
-                if "@" in email:
+                if '@' in email:
                     info.email = email
 
-            if line.lower() == "telefono" and i + 1 < len(lines):
+            if line.lower() == 'telefono' and i + 1 < len(lines):
                 phone = lines[i + 1].strip()
                 if phone and len(phone) > 5:
                     info.phone = phone
 
-            if line.lower() == "indirizzo" and i + 1 < len(lines):
+            if line.lower() == 'indirizzo' and i + 1 < len(lines):
                 address = lines[i + 1].strip()
                 if address and len(address) > 10:
                     info.address = address
-                    city_match = re.search(r"-\s*([A-Z][a-zA-Z\s]+)\s*\(", address)
+                    city_match = re.search(r'-\s*([A-Z][a-zA-Z\s]+)\s*\(', address)
                     if city_match:
                         info.city = city_match.group(1).strip()
 
         return info
+
 
     def _extract_europass_experience(self, text: str) -> List[Experience]:
         """Extract experience from Europass."""
         experiences = []
 
         section_match = re.search(
-            r"ESPERIENZA LAVORATIVA(.*?)(?:ISTRUZIONE E FORMAZIONE|CAPACITA)",
+            r'ESPERIENZA LAVORATIVA(.*?)(?:ISTRUZIONE E FORMAZIONE|CAPACITA)',
             text,
-            re.IGNORECASE | re.DOTALL,
+            re.IGNORECASE | re.DOTALL
         )
 
         if not section_match:
             return experiences
 
         section = section_match.group(1)
-        entries = re.split(r"\*\s*Date\s*\(da\s*[-–]\s*a\)", section)
+        entries = re.split(r'\*\s*Date\s*\(da\s*[-–]\s*a\)', section)
 
         for entry in entries[1:]:
             exp = Experience()
-            lines = [line.strip() for line in entry.split("\n") if line.strip()]
+            lines = [l.strip() for l in entry.split('\n') if l.strip()]
 
             if len(lines) == 0:
                 continue
 
             # Dates
             if lines[0]:
-                date_match = re.search(
-                    r"(\d{4})\s*[-–]\s*(\d{4}|in corso)", lines[0], re.IGNORECASE
-                )
+                date_match = re.search(r'(\d{4})\s*[-–]\s*(\d{4}|in corso)', lines[0], re.IGNORECASE)
                 if date_match:
                     exp.start_date = date_match.group(1)
                     end = date_match.group(2)
-                    exp.end_date = None if "corso" in end.lower() else end
+                    exp.end_date = None if 'corso' in end.lower() else end
 
             # Company
             for i, line in enumerate(lines):
-                if any(
-                    key in line.lower()
-                    for key in ["nome e indirizzo", "datore di lavoro"]
-                ):
+                if any(key in line.lower() for key in ['nome e indirizzo', 'datore di lavoro']):
                     if i + 1 < len(lines):
                         company = lines[i + 1]
                         exp.company = company
-                        city_match = re.search(r"-\s*([A-Z][a-zA-Z]+)\s*\(", company)
+                        city_match = re.search(r'-\s*([A-Z][a-zA-Z]+)\s*\(', company)
                         if city_match:
                             exp.city = city_match.group(1)
                     break
 
             # Job title
             for i, line in enumerate(lines):
-                if "tipo di impiego" in line.lower():
+                if 'tipo di impiego' in line.lower():
                     if i + 1 < len(lines):
                         exp.title = lines[i + 1]
                     break
 
             # Responsibilities
             for i, line in enumerate(lines):
-                if "mansioni e responsabilita" in line.lower():
+                if 'mansioni e responsabilita' in line.lower():
                     if i + 1 < len(lines):
-                        resp_text = " ".join(lines[i + 1 : i + 4])
+                        resp_text = ' '.join(lines[i + 1:i + 4])
                         if resp_text:
-                            resp_list = re.split(r"[;,]\s*", resp_text)
-                            exp.responsibilities = [
-                                r.strip() for r in resp_list if len(r.strip()) > 10
-                            ][:5]
+                            resp_list = re.split(r'[;,]\s*', resp_text)
+                            exp.responsibilities = [r.strip() for r in resp_list if len(r.strip()) > 10][:5]
                     break
 
             if exp.title or exp.company:
@@ -520,51 +400,52 @@ class OllamaCVParser:
 
         return experiences
 
+
     def _extract_europass_education(self, text: str) -> List[Education]:
         """Extract education from Europass."""
         educations = []
 
         section_match = re.search(
-            r"ISTRUZIONE E FORMAZIONE(.*?)(?:CAPACITA|ALTRE LINGUA|$)",
+            r'ISTRUZIONE E FORMAZIONE(.*?)(?:CAPACITA|ALTRE LINGUA|$)',
             text,
-            re.IGNORECASE | re.DOTALL,
+            re.IGNORECASE | re.DOTALL
         )
 
         if not section_match:
             return educations
 
         section = section_match.group(1)
-        entries = re.split(r"\*\s*Date\s*\(da\s*[-–]\s*a\)", section)
+        entries = re.split(r'\*\s*Date\s*\(da\s*[-–]\s*a\)', section)
 
         for entry in entries[1:]:
             edu = Education()
-            lines = [line.strip() for line in entry.split("\n") if line.strip()]
+            lines = [l.strip() for l in entry.split('\n') if l.strip()]
 
             if len(lines) == 0:
                 continue
 
             # Year
             if lines[0]:
-                year_match = re.search(r"(\d{4})", lines[0])
+                year_match = re.search(r'(\d{4})', lines[0])
                 if year_match:
                     edu.graduation_year = int(year_match.group(1))
 
             # Institution
             for i, line in enumerate(lines):
-                if "nome e tipo di istituto" in line.lower():
+                if 'nome e tipo di istituto' in line.lower():
                     if i + 1 < len(lines):
                         edu.institution = lines[i + 1]
                     break
 
             # Degree
             for i, line in enumerate(lines):
-                if "qualifica conseguita" in line.lower():
+                if 'qualifica conseguita' in line.lower():
                     if i + 1 < len(lines):
                         edu.degree = lines[i + 1]
                     break
 
             # GPA
-            gpa_match = re.search(r"(\d{2,3})/(\d{2,3})", entry)
+            gpa_match = re.search(r'(\d{2,3})/(\d{2,3})', entry)
             if gpa_match:
                 edu.gpa = gpa_match.group(0)
 
@@ -573,19 +454,22 @@ class OllamaCVParser:
 
         return educations
 
+
     def _extract_europass_languages(self, text: str) -> List[Language]:
         """Extract languages from Europass."""
         languages = []
 
         section_match = re.search(
-            r"ALTRE LINGUA(.*?)(?:CAPACITA|$)", text, re.IGNORECASE | re.DOTALL
+            r'ALTRE LINGUA(.*?)(?:CAPACITA|$)',
+            text,
+            re.IGNORECASE | re.DOTALL
         )
 
         if not section_match:
             return languages
 
         section = section_match.group(1)
-        lines = [line.strip() for line in section.split("\n") if line.strip()]
+        lines = [l.strip() for l in section.split('\n') if l.strip()]
 
         current_lang = None
         current_prof = []
@@ -595,40 +479,26 @@ class OllamaCVParser:
 
             if line_lower in self.language_database:
                 if current_lang:
-                    languages.append(
-                        Language(
-                            name=current_lang,
-                            proficiency=(
-                                " ".join(current_prof) if current_prof else None
-                            ),
-                        )
-                    )
+                    languages.append(Language(
+                        name=current_lang,
+                        proficiency=' '.join(current_prof) if current_prof else None
+                    ))
 
                 current_lang = self.language_database[line_lower][0]
                 current_prof = []
 
             elif current_lang:
-                if any(
-                    word in line_lower
-                    for word in [
-                        "intermediate",
-                        "advanced",
-                        "toefl",
-                        "ielts",
-                        "capacita",
-                    ]
-                ):
+                if any(word in line_lower for word in ['intermediate', 'advanced', 'toefl', 'ielts', 'capacita']):
                     current_prof.append(line)
 
         if current_lang:
-            languages.append(
-                Language(
-                    name=current_lang,
-                    proficiency=" ".join(current_prof) if current_prof else None,
-                )
-            )
+            languages.append(Language(
+                name=current_lang,
+                proficiency=' '.join(current_prof) if current_prof else None
+            ))
 
         return languages
+
 
     # ========================================================================
     # STANDARD LLM EXTRACTION
@@ -640,11 +510,7 @@ class OllamaCVParser:
         prompt = self._get_robust_prompt(text[:8000])
 
         try:
-            if not getattr(self, "llm", None):
-                print(f"      [WARN] LLM client not available (base_url: {getattr(self, 'base_url', 'unknown')}) - skipping LLM extraction")
-                return self._create_empty_document()
-            # Use direct HTTP call with extended timeout to avoid client-side timeouts
-            response = self._call_llm(prompt, timeout=600, retries=2)
+            response = self.llm.invoke(prompt)
             data = self._parse_json_response(response)
             print("      ✓ Success")
             return data
@@ -652,17 +518,34 @@ class OllamaCVParser:
             print(f"      ✗ LLM failed: {str(e)[:50]}")
             return self._create_empty_document()
 
+
     def _get_robust_prompt(self, text: str) -> str:
-        """Optimized prompt for faster CV parsing."""
-        prompt_template = """Extract CV data as JSON:
+        """Robust prompt for standard CVs."""
+        return f"""Extract CV data into VALID JSON.
 
-{"personal_info":{"full_name":"","email":"","phone":"","city":""},"experience":[{"title":"","company":"","start_date":"","end_date":"","responsibilities":[]}],"education":[{"degree":"","institution":"","graduation_year":null}],"skills":[{"name":""}],"languages":[{"name":"","proficiency":""}]}
+RULES:
+1. Output ONLY valid JSON
+2. Extract ALL fields
+3. Languages: ONLY language names
+4. Skills: Technical skills only
+5. Certifications: Full names
 
-CV TEXT:
+SCHEMA:
+{{
+  "personal_info": {{"full_name": "Name", "email": "email", "phone": "phone", "address": "Via X", "city": "City", "country": "Country"}},
+  "summary": "Professional summary",
+  "experience": [{{"title": "Job", "company": "Company", "city": "City", "start_date": "YYYY", "end_date": "YYYY", "responsibilities": ["r1"]}}],
+  "education": [{{"degree": "Degree", "institution": "Institution", "graduation_year": 2020, "gpa": "110/110"}}],
+  "skills": [{{"name": "Python"}}],
+  "languages": [{{"name": "Italiano", "proficiency": "Madrelingua"}}],
+  "certifications": [{{"name": "Cert", "date_obtained": "2023"}}]
+}}
+
+CV:
 {text}
 
 JSON:"""
-        return prompt_template.replace("{text}", text[:4000])  # Reduced text size for faster processing
+
 
     def _parse_json_response(self, response: str) -> ParsedDocument:
         """Parse JSON response."""
@@ -671,62 +554,56 @@ JSON:"""
         try:
             data_dict = json.loads(response)
             return self._dict_to_document(data_dict)
-        except Exception:
+        except:
             pass
 
-        json_match = re.search(r"\{.*\}", response, re.DOTALL)
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
         if json_match:
             try:
                 data_dict = json.loads(json_match.group(0))
                 return self._dict_to_document(data_dict)
-            except Exception:
+            except:
                 pass
 
         return self._create_empty_document()
+
 
     def _dict_to_document(self, data_dict: dict) -> ParsedDocument:
         """Convert dict to document."""
         doc = ParsedDocument(document_type=DocumentType.cv, parsed_at=datetime.now())
 
-        if "personal_info" in data_dict:
-            pi = data_dict["personal_info"]
+        if 'personal_info' in data_dict:
+            pi = data_dict['personal_info']
             doc.personal_info = PersonalInfo(**{k: v for k, v in pi.items() if v})
 
-        if "summary" in data_dict:
-            doc.summary = data_dict["summary"]
+        if 'summary' in data_dict:
+            doc.summary = data_dict['summary']
 
-        if "experience" in data_dict:
-            for exp in data_dict["experience"]:
-                doc.experience.append(
-                    Experience(**{k: v for k, v in exp.items() if k != "spans"})
-                )
+        if 'experience' in data_dict:
+            for exp in data_dict['experience']:
+                doc.experience.append(Experience(**{k: v for k, v in exp.items() if k != 'spans'}))
 
-        if "education" in data_dict:
-            for edu in data_dict["education"]:
-                doc.education.append(
-                    Education(**{k: v for k, v in edu.items() if k != "spans"})
-                )
+        if 'education' in data_dict:
+            for edu in data_dict['education']:
+                doc.education.append(Education(**{k: v for k, v in edu.items() if k != 'spans'}))
 
-        if "skills" in data_dict:
-            for skill in data_dict["skills"]:
-                if isinstance(skill, dict) and "name" in skill:
-                    doc.skills.append(
-                        Skill(name=skill["name"], source=SkillSource.extracted)
-                    )
+        if 'skills' in data_dict:
+            for skill in data_dict['skills']:
+                if isinstance(skill, dict) and 'name' in skill:
+                    doc.skills.append(Skill(name=skill['name'], source=SkillSource.extracted))
 
-        if "languages" in data_dict:
-            for lang in data_dict["languages"]:
-                if isinstance(lang, dict) and "name" in lang:
+        if 'languages' in data_dict:
+            for lang in data_dict['languages']:
+                if isinstance(lang, dict) and 'name' in lang:
                     doc.languages.append(Language(**{k: v for k, v in lang.items()}))
 
-        if "certifications" in data_dict:
-            for cert in data_dict["certifications"]:
-                if isinstance(cert, dict) and "name" in cert:
-                    doc.certifications.append(
-                        Certification(**{k: v for k, v in cert.items()})
-                    )
+        if 'certifications' in data_dict:
+            for cert in data_dict['certifications']:
+                if isinstance(cert, dict) and 'name' in cert:
+                    doc.certifications.append(Certification(**{k: v for k, v in cert.items()}))
 
         return doc
+
 
     # ========================================================================
     # POST-PROCESSING (consolidated)
@@ -792,9 +669,7 @@ JSON:"""
 
         # Confidence computation
         print("\n[13/16] Confidence...")
-        data.gdpr_consent = (
-            "gdpr" in data.full_text[-2000:].lower() if data.full_text else False
-        )
+        data.gdpr_consent = 'gdpr' in data.full_text[-2000:].lower() if data.full_text else False
         data.detect_missing_sections()
         data.compute_section_confidence()
         data.detect_low_confidence_sections_v2()
@@ -802,6 +677,7 @@ JSON:"""
 
         if data.warnings:
             print(f"  {len(data.warnings)} warnings")
+
 
     # ========================================================================
     #  ENHANCED: EXPERIENCE DESCRIPTIONS ENRICHMENT
@@ -829,23 +705,19 @@ JSON:"""
         improved_count = 0
         skipped_count = 0
         max_process = 10  # Performance limit
-        total_to_process = min(max_process, len(data.experience))
 
         for i, exp in enumerate(data.experience[:max_process]):
             # Check if needs enrichment
             if exp.description:
                 if self._is_high_quality_description(exp.description):
-                    header = f"[{i+1}/{total_to_process}] {exp.title[:30]}"
-                    print(f"{header}: Skip (high quality)")
+                    print(f"        [{i+1}/{min(max_process, len(data.experience))}] {exp.title[:30]}: Skip (high quality)")
                     skipped_count += 1
                     continue
                 else:
-                    header = f"[{i+1}/{total_to_process}] {exp.title[:30]}"
-                    print(f"        {header}: Improving...")
+                    print(f"        [{i+1}/{min(max_process, len(data.experience))}] {exp.title[:30]}: Improving...")
                     action = "improve"
             else:
-                header = f"[{i+1}/{total_to_process}] {exp.title[:30]}"
-                print(f"        {header}: Generating...")
+                print(f"        [{i+1}/{min(max_process, len(data.experience))}] {exp.title[:30]}: Generating...")
                 action = "generate"
 
             # Try to generate description (with retry)
@@ -860,16 +732,14 @@ JSON:"""
                     enriched_count += 1
                     print(f"          ✓ Generated ({len(description)} chars)")
             else:
-                print("          ✗ Failed")
+                print(f"          ✗ Failed")
 
         total_processed = enriched_count + improved_count
         if total_processed > 0:
-            print(
-                f"      ✓ Generated: {enriched_count}, "
-                f"Improved: {improved_count}, Skipped: {skipped_count}"
-            )
+            print(f"      ✓ Generated: {enriched_count}, Improved: {improved_count}, Skipped: {skipped_count}")
         else:
             print(f"      ✓ Skipped: {skipped_count} (all high quality)")
+
 
     def _is_high_quality_description(self, description: str) -> bool:
         """
@@ -895,24 +765,10 @@ JSON:"""
 
         # Check for action verbs (generic indicators of quality)
         action_verbs = [
-            "managed",
-            "developed",
-            "implemented",
-            "led",
-            "created",
-            "designed",
-            "built",
-            "coordinated",
-            "achieved",
-            "improved",
-            "gestito",
-            "sviluppato",
-            "implementato",
-            "creato",
-            "progettato",
-            "coordinato",
-            "migliorato",
-            "realizzato",
+            'managed', 'developed', 'implemented', 'led', 'created',
+            'designed', 'built', 'coordinated', 'achieved', 'improved',
+            'gestito', 'sviluppato', 'implementato', 'creato', 'progettato',
+            'coordinato', 'migliorato', 'realizzato'
         ]
 
         has_action = any(verb in desc_lower for verb in action_verbs)
@@ -920,13 +776,13 @@ JSON:"""
             return False
 
         # Check for specific details (numbers or technical terms)
+        has_numbers = bool(re.search(r'\d+', description))
         has_specifics = len(description.split()) > 20  # More than 20 words
 
         return has_specifics
 
-    def _generate_description_with_retry(
-        self, data: ParsedDocument, exp: Experience, max_attempts: int = 2
-    ) -> Optional[str]:
+
+    def _generate_description_with_retry(self, data: ParsedDocument, exp: Experience, max_attempts: int = 2) -> Optional[str]:
         """
          NEW: Generate description with retry mechanism.
 
@@ -960,9 +816,8 @@ JSON:"""
 
         return None
 
-    def _extract_job_context_enhanced(
-        self, text: str, exp: Experience
-    ) -> Optional[str]:
+
+    def _extract_job_context_enhanced(self, text: str, exp: Experience) -> Optional[str]:
         """
          ENHANCED: Extract job context with 3-tier fallback.
 
@@ -983,12 +838,8 @@ JSON:"""
         if exp.title and exp.company:
             title_idx = text_lower.find(exp.title.lower())
             if title_idx != -1:
-                window = text_lower[title_idx : title_idx + 300]
-                company_clean = (
-                    exp.company.split("-")[0].strip()
-                    if "-" in exp.company
-                    else exp.company
-                )
+                window = text_lower[title_idx:title_idx + 300]
+                company_clean = exp.company.split('-')[0].strip() if '-' in exp.company else exp.company
                 if company_clean.lower() in window:
                     end_idx = min(title_idx + 1000, len(text))
                     return text[title_idx:end_idx]
@@ -1002,15 +853,14 @@ JSON:"""
 
         # Strategy 3: Company only (less reliable)
         if exp.company:
-            company_clean = (
-                exp.company.split("-")[0].strip() if "-" in exp.company else exp.company
-            )
+            company_clean = exp.company.split('-')[0].strip() if '-' in exp.company else exp.company
             company_idx = text_lower.find(company_clean.lower())
             if company_idx != -1:
                 end_idx = min(company_idx + 600, len(text))
                 return text[company_idx:end_idx]
 
         return None
+
 
     def _generate_from_context(self, exp: Experience, context: str) -> Optional[str]:
         """
@@ -1035,16 +885,11 @@ OUTPUT: Single paragraph, 150-300 chars. Start directly, no prefix.
 DESCRIPTION:"""
 
         try:
-            if not getattr(self, "llm", None):
-                print(
-                    "      [WARN] LLM client not available - "
-                    "cannot generate from context"
-                )
-                return None
-            response = self._call_llm(prompt, timeout=300, retries=2)
+            response = self.llm.invoke(prompt)
             return self._clean_llm_description(response)
-        except Exception:
+        except:
             return None
+
 
     def _generate_from_responsibilities(self, exp: Experience) -> Optional[str]:
         """
@@ -1065,22 +910,16 @@ COMPANY: {exp.company or 'N/A'}
 KEY RESPONSIBILITIES:
 {resp_text}
 
-Write a concise summary of the role.
-Single paragraph, 150-300 chars. No prefix.
+Write a concise summary of the role. Single paragraph, 150-300 chars. No prefix.
 
 DESCRIPTION:"""
 
         try:
-            if not getattr(self, "llm", None):
-                print(
-                    "      [WARN] LLM client not available - "
-                    "cannot generate from responsibilities"
-                )
-                return None
-            response = self._call_llm(prompt, timeout=300, retries=2)
+            response = self.llm.invoke(prompt)
             return self._clean_llm_description(response)
-        except Exception:
+        except:
             return None
+
 
     def _generate_minimal(self, exp: Experience) -> Optional[str]:
         """
@@ -1093,22 +932,16 @@ DESCRIPTION:"""
 JOB TITLE: {exp.title}
 COMPANY: {exp.company or 'Company'}
 
-Write a one-sentence summary of typical responsibilities for this role.
-100-200 chars. No prefix.
+Write a one-sentence summary of typical responsibilities for this role. 100-200 chars. No prefix.
 
 DESCRIPTION:"""
 
         try:
-            if not getattr(self, "llm", None):
-                print(
-                    "      [WARN] LLM client not available - "
-                    "cannot generate minimal description"
-                )
-                return None
-            response = self._call_llm(prompt, timeout=120, retries=2)
+            response = self.llm.invoke(prompt)
             return self._clean_llm_description(response)
-        except Exception:
+        except:
             return None
+
 
     def _clean_llm_description(self, response: str) -> Optional[str]:
         """
@@ -1126,26 +959,20 @@ DESCRIPTION:"""
 
         # Remove prefixes
         unwanted_prefixes = [
-            "here is",
-            "job description:",
-            "summary:",
-            "description:",
-            "the role",
-            "as a",
-            "in this role",
-            "this position",
+            'here is', 'job description:', 'summary:', 'description:',
+            'the role', 'as a', 'in this role', 'this position'
         ]
 
         desc_lower = desc.lower()
         for prefix in unwanted_prefixes:
             if desc_lower.startswith(prefix):
-                desc = desc[len(prefix) :].strip()
-                desc = desc.lstrip(":-").strip()
+                desc = desc[len(prefix):].strip()
+                desc = desc.lstrip(':-').strip()
                 desc_lower = desc.lower()
 
         # Remove markdown
-        desc = re.sub(r"\*\*(.+?)\*\*", r"\1", desc)
-        desc = re.sub(r"^[\*\-\•]\s+", "", desc)
+        desc = re.sub(r'\*\*(.+?)\*\*', r'\1', desc)
+        desc = re.sub(r'^[\*\-\•]\s+', '', desc)
 
         # Capitalize first letter
         if desc and desc[0].islower():
@@ -1160,6 +987,7 @@ DESCRIPTION:"""
             desc = desc[:497] + "..."
 
         return desc
+
 
     def _validate_description_quality(self, description: str) -> bool:
         """
@@ -1183,16 +1011,17 @@ DESCRIPTION:"""
         # Check if too generic (reject if only stopwords)
         desc_lower = description.lower()
         generic_only_patterns = [
-            "responsible for various tasks",
-            "performed duties as assigned",
-            "worked on projects",
-            "handled responsibilities",
+            'responsible for various tasks',
+            'performed duties as assigned',
+            'worked on projects',
+            'handled responsibilities'
         ]
 
         if any(pattern in desc_lower for pattern in generic_only_patterns):
             return False
 
         return True
+
 
     # ========================================================================
     # SKILLS FILTERING (from v1.7.3)
@@ -1212,15 +1041,14 @@ DESCRIPTION:"""
         llm_count = len(data.skills)
 
         if llm_count < 5:
-            print(
-                f"      ⚠️  Low skill count ({llm_count}), using heuristic fallback..."
-            )
+            print(f"      ⚠️  Low skill count ({llm_count}), using heuristic fallback...")
             added = self._add_heuristic_skills(data)
             print(f"      ✓ Added {added} heuristic skills (total: {len(data.skills)})")
         else:
             print(f"      ✓ LLM skills sufficient ({llm_count}), skipping heuristic")
 
         data.skills = data.skills[:15]
+
 
     def _add_heuristic_skills(self, data: ParsedDocument) -> int:
         """Add skills via heuristic with context checking."""
@@ -1246,19 +1074,22 @@ DESCRIPTION:"""
                 continue
 
             skill_name = keyword.upper() if len(keyword) <= 5 else keyword.title()
-            data.skills.append(
-                Skill(name=skill_name, source=SkillSource.heuristic, confidence=0.6)
-            )
+            data.skills.append(Skill(
+                name=skill_name,
+                source=SkillSource.heuristic,
+                confidence=0.6
+            ))
             existing.add(keyword)
             added_count += 1
 
         return added_count
 
+
     def _has_negation_context(self, text_lower: str, keyword: str) -> bool:
         """Check if keyword appears with negation."""
         negation_patterns = [
-            f"no experience with {keyword}",
-            f"no knowledge of {keyword}",
+            f'no experience with {keyword}',
+            f'no knowledge of {keyword}',
             f"don't know {keyword}",
             f"do not know {keyword}",
             f"not familiar with {keyword}",
@@ -1271,6 +1102,7 @@ DESCRIPTION:"""
         ]
 
         return any(pattern in text_lower for pattern in negation_patterns)
+
 
     # ========================================================================
     # ENHANCED SPANS EXTRACTION (from v1.7.2)
@@ -1297,9 +1129,8 @@ DESCRIPTION:"""
 
         print(f"      ✓ Extracted {spans_count} spans")
 
-    def _extract_personal_info_spans(
-        self, data: ParsedDocument, text: str, text_lower: str
-    ) -> int:
+
+    def _extract_personal_info_spans(self, data: ParsedDocument, text: str, text_lower: str) -> int:
         """Extract personal info spans."""
         count = 0
         pi = data.personal_info
@@ -1307,64 +1138,47 @@ DESCRIPTION:"""
         if pi.email and len(pi.email) > 5:
             idx = text_lower.find(pi.email.lower())
             if idx != -1:
-                data.all_spans.append(
-                    Span(
-                        start=idx,
-                        end=idx + len(pi.email),
-                        text=text[idx : idx + len(pi.email)],
-                        field="personal_info.email",
-                        confidence=0.99,
-                    )
-                )
+                data.all_spans.append(Span(
+                    start=idx, end=idx + len(pi.email),
+                    text=text[idx:idx + len(pi.email)],
+                    field="personal_info.email", confidence=0.99
+                ))
                 count += 1
 
         if pi.phone and len(pi.phone) > 8:
             idx = text.find(pi.phone)
             if idx != -1:
-                data.all_spans.append(
-                    Span(
-                        start=idx,
-                        end=idx + len(pi.phone),
-                        text=pi.phone,
-                        field="personal_info.phone",
-                        confidence=0.95,
-                    )
-                )
+                data.all_spans.append(Span(
+                    start=idx, end=idx + len(pi.phone),
+                    text=pi.phone,
+                    field="personal_info.phone", confidence=0.95
+                ))
                 count += 1
 
         if pi.full_name and len(pi.full_name) > 5:
             idx = text_lower.find(pi.full_name.lower())
             if idx != -1:
-                data.all_spans.append(
-                    Span(
-                        start=idx,
-                        end=idx + len(pi.full_name),
-                        text=text[idx : idx + len(pi.full_name)],
-                        field="personal_info.full_name",
-                        confidence=0.95,
-                    )
-                )
+                data.all_spans.append(Span(
+                    start=idx, end=idx + len(pi.full_name),
+                    text=text[idx:idx + len(pi.full_name)],
+                    field="personal_info.full_name", confidence=0.95
+                ))
                 count += 1
 
         if pi.city and len(pi.city) > 3:
             idx = text_lower.find(pi.city.lower())
             if idx != -1:
-                data.all_spans.append(
-                    Span(
-                        start=idx,
-                        end=idx + len(pi.city),
-                        text=text[idx : idx + len(pi.city)],
-                        field="personal_info.city",
-                        confidence=0.90,
-                    )
-                )
+                data.all_spans.append(Span(
+                    start=idx, end=idx + len(pi.city),
+                    text=text[idx:idx + len(pi.city)],
+                    field="personal_info.city", confidence=0.90
+                ))
                 count += 1
 
         return count
 
-    def _extract_experience_spans(
-        self, data: ParsedDocument, text: str, text_lower: str
-    ) -> int:
+
+    def _extract_experience_spans(self, data: ParsedDocument, text: str, text_lower: str) -> int:
         """Extract experience spans."""
         count = 0
 
@@ -1372,41 +1186,28 @@ DESCRIPTION:"""
             if exp.title and len(exp.title) > 5:
                 idx = text_lower.find(exp.title.lower())
                 if idx != -1:
-                    data.all_spans.append(
-                        Span(
-                            start=idx,
-                            end=idx + len(exp.title),
-                            text=text[idx : idx + len(exp.title)],
-                            field=f"experience[{i}].title",
-                            confidence=0.90,
-                        )
-                    )
+                    data.all_spans.append(Span(
+                        start=idx, end=idx + len(exp.title),
+                        text=text[idx:idx + len(exp.title)],
+                        field=f"experience[{i}].title", confidence=0.90
+                    ))
                     count += 1
 
             if exp.company and len(exp.company) > 5:
-                company_clean = (
-                    exp.company.split("-")[0].strip()
-                    if "-" in exp.company
-                    else exp.company
-                )
+                company_clean = exp.company.split('-')[0].strip() if '-' in exp.company else exp.company
                 idx = text_lower.find(company_clean.lower())
                 if idx != -1:
-                    data.all_spans.append(
-                        Span(
-                            start=idx,
-                            end=idx + len(company_clean),
-                            text=text[idx : idx + len(company_clean)],
-                            field=f"experience[{i}].company",
-                            confidence=0.90,
-                        )
-                    )
+                    data.all_spans.append(Span(
+                        start=idx, end=idx + len(company_clean),
+                        text=text[idx:idx + len(company_clean)],
+                        field=f"experience[{i}].company", confidence=0.90
+                    ))
                     count += 1
 
         return count
 
-    def _extract_education_spans(
-        self, data: ParsedDocument, text: str, text_lower: str
-    ) -> int:
+
+    def _extract_education_spans(self, data: ParsedDocument, text: str, text_lower: str) -> int:
         """Extract education spans."""
         count = 0
 
@@ -1414,36 +1215,27 @@ DESCRIPTION:"""
             if edu.degree and len(edu.degree) > 10:
                 idx = text_lower.find(edu.degree.lower())
                 if idx != -1:
-                    data.all_spans.append(
-                        Span(
-                            start=idx,
-                            end=idx + len(edu.degree),
-                            text=text[idx : idx + len(edu.degree)],
-                            field=f"education[{i}].degree",
-                            confidence=0.85,
-                        )
-                    )
+                    data.all_spans.append(Span(
+                        start=idx, end=idx + len(edu.degree),
+                        text=text[idx:idx + len(edu.degree)],
+                        field=f"education[{i}].degree", confidence=0.85
+                    ))
                     count += 1
 
             if edu.institution and len(edu.institution) > 10:
                 idx = text_lower.find(edu.institution.lower())
                 if idx != -1:
-                    data.all_spans.append(
-                        Span(
-                            start=idx,
-                            end=idx + len(edu.institution),
-                            text=text[idx : idx + len(edu.institution)],
-                            field=f"education[{i}].institution",
-                            confidence=0.85,
-                        )
-                    )
+                    data.all_spans.append(Span(
+                        start=idx, end=idx + len(edu.institution),
+                        text=text[idx:idx + len(edu.institution)],
+                        field=f"education[{i}].institution", confidence=0.85
+                    ))
                     count += 1
 
         return count
 
-    def _extract_skills_spans(
-        self, data: ParsedDocument, text: str, text_lower: str
-    ) -> int:
+
+    def _extract_skills_spans(self, data: ParsedDocument, text: str, text_lower: str) -> int:
         """Extract skills spans."""
         count = 0
 
@@ -1451,22 +1243,17 @@ DESCRIPTION:"""
             if skill.name and len(skill.name) > 3:
                 idx = text_lower.find(skill.name.lower())
                 if idx != -1:
-                    data.all_spans.append(
-                        Span(
-                            start=idx,
-                            end=idx + len(skill.name),
-                            text=text[idx : idx + len(skill.name)],
-                            field=f"skills[{i}].name",
-                            confidence=0.80,
-                        )
-                    )
+                    data.all_spans.append(Span(
+                        start=idx, end=idx + len(skill.name),
+                        text=text[idx:idx + len(skill.name)],
+                        field=f"skills[{i}].name", confidence=0.80
+                    ))
                     count += 1
 
         return count
 
-    def _extract_languages_spans(
-        self, data: ParsedDocument, text: str, text_lower: str
-    ) -> int:
+
+    def _extract_languages_spans(self, data: ParsedDocument, text: str, text_lower: str) -> int:
         """Extract languages spans."""
         count = 0
 
@@ -1474,22 +1261,17 @@ DESCRIPTION:"""
             if lang.name and len(lang.name) > 4:
                 idx = text_lower.find(lang.name.lower())
                 if idx != -1:
-                    data.all_spans.append(
-                        Span(
-                            start=idx,
-                            end=idx + len(lang.name),
-                            text=text[idx : idx + len(lang.name)],
-                            field=f"languages[{i}].name",
-                            confidence=0.85,
-                        )
-                    )
+                    data.all_spans.append(Span(
+                        start=idx, end=idx + len(lang.name),
+                        text=text[idx:idx + len(lang.name)],
+                        field=f"languages[{i}].name", confidence=0.85
+                    ))
                     count += 1
 
         return count
 
-    def _extract_certifications_spans(
-        self, data: ParsedDocument, text: str, text_lower: str
-    ) -> int:
+
+    def _extract_certifications_spans(self, data: ParsedDocument, text: str, text_lower: str) -> int:
         """Extract certifications spans."""
         count = 0
 
@@ -1497,34 +1279,27 @@ DESCRIPTION:"""
             if cert.name and len(cert.name) > 5:
                 idx = text_lower.find(cert.name.lower())
                 if idx != -1:
-                    data.all_spans.append(
-                        Span(
-                            start=idx,
-                            end=idx + len(cert.name),
-                            text=text[idx : idx + len(cert.name)],
-                            field=f"certifications[{i}].name",
-                            confidence=0.85,
-                        )
-                    )
+                    data.all_spans.append(Span(
+                        start=idx, end=idx + len(cert.name),
+                        text=text[idx:idx + len(cert.name)],
+                        field=f"certifications[{i}].name", confidence=0.85
+                    ))
                     count += 1
                 else:
-                    acronym_match = re.match(r"^([A-Z\-]+)", cert.name)
+                    acronym_match = re.match(r'^([A-Z\-]+)', cert.name)
                     if acronym_match:
                         acronym = acronym_match.group(1)
                         idx = text_lower.find(acronym.lower())
                         if idx != -1:
-                            data.all_spans.append(
-                                Span(
-                                    start=idx,
-                                    end=idx + len(acronym),
-                                    text=text[idx : idx + len(acronym)],
-                                    field=f"certifications[{i}].name",
-                                    confidence=0.75,
-                                )
-                            )
+                            data.all_spans.append(Span(
+                                start=idx, end=idx + len(acronym),
+                                text=text[idx:idx + len(acronym)],
+                                field=f"certifications[{i}].name", confidence=0.75
+                            ))
                             count += 1
 
         return count
+
 
     # ========================================================================
     # DATE CLEANING MODULE (from v1.7.1)
@@ -1550,7 +1325,7 @@ DESCRIPTION:"""
                     cleaned_count += 1
 
         for edu in data.education:
-            if hasattr(edu, "start_date") and edu.start_date:
+            if hasattr(edu, 'start_date') and edu.start_date:
                 original = edu.start_date
                 edu.start_date = self._clean_single_date(edu.start_date)
                 if edu.start_date != original:
@@ -1566,17 +1341,19 @@ DESCRIPTION:"""
         if cleaned_count > 0:
             print(f"      ✓ Cleaned {cleaned_count} dates")
         else:
-            print("      ✓ No dates to clean")
+            print(f"      ✓ No dates to clean")
+
 
     def _clean_single_date(self, date_str: str) -> str:
         """Clean single date string."""
         if not date_str or not isinstance(date_str, str):
             return date_str
 
-        cleaned = re.sub(r"\s*\([^)]*\)", "", date_str)
-        cleaned = cleaned.strip().rstrip(",-;")
+        cleaned = re.sub(r'\s*\([^)]*\)', '', date_str)
+        cleaned = cleaned.strip().rstrip(',-;')
 
         return cleaned if cleaned else date_str
+
 
     # ========================================================================
     # POST-PROCESSING MODULES (from v1.7.3)
@@ -1584,17 +1361,15 @@ DESCRIPTION:"""
 
     def _extract_education_fallback(self, data: ParsedDocument):
         """Extract education fallback."""
-        edu_section = self._find_section(
-            data.full_text, ["formazione", "education", "istruzione"]
-        )
+        edu_section = self._find_section(data.full_text, ['formazione', 'education', 'istruzione'])
         if not edu_section:
             return
 
-        for line in edu_section.split("\n"):
+        for line in edu_section.split('\n'):
             line = line.strip()
 
-            if "|" in line and len(line) > 20:
-                parts = [p.strip() for p in line.split("|")]
+            if '|' in line and len(line) > 20:
+                parts = [p.strip() for p in line.split('|')]
 
                 if len(parts) >= 2:
                     degree = parts[0]
@@ -1602,45 +1377,45 @@ DESCRIPTION:"""
                     year = None
 
                     for part in parts:
-                        year_match = re.search(r"\b(19|20)\d{2}\b", part)
+                        year_match = re.search(r'\b(19|20)\d{2}\b', part)
                         if year_match:
                             year = int(year_match.group(0))
                             break
 
                     gpa = None
-                    gpa_match = re.search(r"(\d{2,3})/(\d{2,3})", line)
+                    gpa_match = re.search(r'(\d{2,3})/(\d{2,3})', line)
                     if gpa_match:
                         gpa = gpa_match.group(0)
 
-                    data.education.append(
-                        Education(
-                            degree=degree,
-                            institution=institution,
-                            graduation_year=year,
-                            gpa=gpa,
-                        )
-                    )
+                    data.education.append(Education(
+                        degree=degree,
+                        institution=institution,
+                        graduation_year=year,
+                        gpa=gpa
+                    ))
+
 
     def _extract_languages_fallback(self, data: ParsedDocument):
         """Extract languages fallback."""
-        lang_section = self._find_section(data.full_text, ["lingue", "languages"])
+        lang_section = self._find_section(data.full_text, ['lingue', 'languages'])
         if not lang_section:
             return
 
-        if "|" in lang_section:
-            for segment in lang_section.split("|"):
-                match = re.match(
-                    r"([A-Za-zàèéìòù\s]+):\s*([^\n\|]{3,100})", segment.strip()
-                )
+        if '|' in lang_section:
+            for segment in lang_section.split('|'):
+                match = re.match(r'([A-Za-zàèéìòù\s]+):\s*([^\n\|]{3,100})', segment.strip())
                 if match:
                     lang_name = match.group(1).strip()
                     prof = match.group(2).strip()
 
                     if lang_name.lower() in self.language_database:
                         canonical, _ = self.language_database[lang_name.lower()]
-                        data.languages.append(
-                            Language(name=canonical, proficiency=prof, level=None)
-                        )
+                        data.languages.append(Language(
+                            name=canonical,
+                            proficiency=prof,
+                            level=None
+                        ))
+
 
     def _validate_and_enrich_language_levels(self, data: ParsedDocument):
         """Validate and enrich language levels."""
@@ -1649,21 +1424,13 @@ DESCRIPTION:"""
 
         print("      Validating levels...")
 
-        valid_cefr = {"C2", "C1", "B2", "B1", "A2", "A1"}
+        valid_cefr = {'C2', 'C1', 'B2', 'B1', 'A2', 'A1'}
 
         level_map = {
-            "madrelingua": "C2",
-            "native": "C2",
-            "fluente": "C1",
-            "fluent": "C1",
-            "avanzato": "C1",
-            "advanced": "C1",
-            "buono": "B2",
-            "good": "B2",
-            "intermedio": "B2",
-            "intermediate": "B2",
-            "base": "A2",
-            "basic": "A2",
+            'madrelingua': 'C2', 'native': 'C2',
+            'fluente': 'C1', 'fluent': 'C1', 'avanzato': 'C1', 'advanced': 'C1',
+            'buono': 'B2', 'good': 'B2', 'intermedio': 'B2', 'intermediate': 'B2',
+            'base': 'A2', 'basic': 'A2',
         }
 
         enriched = 0
@@ -1673,10 +1440,11 @@ DESCRIPTION:"""
                 continue
 
             prof_lower = lang.proficiency.lower()
+            original = lang.level
 
             if not lang.level:
                 for cefr in valid_cefr:
-                    if re.search(rf"\b{cefr.lower()}\b|\({cefr.lower()}\)", prof_lower):
+                    if re.search(rf'\b{cefr.lower()}\b|\({cefr.lower()}\)', prof_lower):
                         lang.level = cefr
                         enriched += 1
                         break
@@ -1693,22 +1461,17 @@ DESCRIPTION:"""
                 if lang.level not in valid_cefr:
                     lang.level = None
 
-        levels_set = sum(1 for lang_item in data.languages if lang_item.level)
+        levels_set = sum(1 for l in data.languages if l.level)
         if enriched > 0:
-            print(
-                f"      ✓ Enriched {enriched}, {levels_set}/{len(data.languages)} total"
-            )
+            print(f"      ✓ Enriched {enriched}, {levels_set}/{len(data.languages)} total")
+
 
     def _deduplicate_certifications(self, data: ParsedDocument):
         """Deduplicate certifications."""
         groups = {}
         for cert in data.certifications:
-            acronym_match = re.match(r"^([A-Z\-]+)", cert.name)
-            key = (
-                acronym_match.group(1).lower().replace("-", "")
-                if acronym_match
-                else cert.name.lower()
-            )
+            acronym_match = re.match(r'^([A-Z\-]+)', cert.name)
+            key = acronym_match.group(1).lower().replace('-', '') if acronym_match else cert.name.lower()
 
             if key not in groups:
                 groups[key] = []
@@ -1727,59 +1490,43 @@ DESCRIPTION:"""
 
         data.certifications = unique
 
+
     def _extract_summary_fallback(self, data: ParsedDocument):
         """Extract summary fallback."""
-        summary_section = self._find_section(
-            data.full_text,
-            [
-                "profilo professionale",
-                "professional profile",
-                "professional summary",
-                "about me",
-                "riepilogo",
-            ],
-        )
+        summary_section = self._find_section(data.full_text, [
+            'profilo professionale', 'professional profile',
+            'professional summary', 'about me', 'riepilogo'
+        ])
 
         if not summary_section:
             return
 
-        lines = [line.strip() for line in summary_section.split("\n") if line.strip()]
-        content_lines = []
-        for line in lines:
-            lower_line = line.lower()
-            if not any(h in lower_line for h in ["profilo", "professional", "summary"]):
-                content_lines.append(line)
+        lines = [l.strip() for l in summary_section.split('\n') if l.strip()]
+        content_lines = [l for l in lines if not any(h in l.lower() for h in ['profilo', 'professional', 'summary'])]
 
         if content_lines:
-            summary = " ".join(content_lines[:3])
+            summary = ' '.join(content_lines[:3])
             if len(summary) > 300:
                 summary = summary[:297] + "..."
             if len(summary) >= 50:
                 data.summary = summary
 
+
     def _enrich_country_info(self, data):
         """Enrich country."""
         if not data.personal_info.country and data.personal_info.city:
-            italian_cities = {
-                "milano",
-                "roma",
-                "padova",
-                "napoli",
-                "torino",
-                "bologna",
-                "mortara",
-            }
+            italian_cities = {'milano', 'roma', 'padova', 'napoli', 'torino', 'bologna', 'mortara'}
             if data.personal_info.city.lower() in italian_cities:
-                data.personal_info.country = "Italy"
+                data.personal_info.country = 'Italy'
+
 
     def _detect_is_current_jobs(self, data):
         """Detect current jobs."""
         for exp in data.experience:
-            if not exp.end_date or any(
-                w in str(exp.end_date).lower() for w in ["present", "presente", "corso"]
-            ):
+            if not exp.end_date or any(w in str(exp.end_date).lower() for w in ['present', 'presente', 'corso']):
                 exp.is_current = True
                 exp.end_date = None
+
 
     def _find_section(self, text, indicators):
         """Find section."""
@@ -1790,138 +1537,54 @@ DESCRIPTION:"""
             idx = text_lower.find(ind)
             if idx != -1:
                 end = len(text)
-                next_secs = [
-                    "esperienza",
-                    "experience",
-                    "formazione",
-                    "education",
-                    "competenze",
-                    "skills",
-                    "certificazioni",
-                    "lingue",
-                    "progetti",
-                ]
+                next_secs = ['esperienza', 'experience', 'formazione', 'education', 'competenze', 'skills', 'certificazioni', 'lingue', 'progetti']
                 for sec in next_secs:
                     next_idx = text_lower.find(sec, idx + len(ind) + 10)
                     if next_idx != -1 and next_idx < end:
                         end = next_idx
-                return text[idx : min(end, idx + 3000)]
+                return text[idx:min(end, idx + 3000)]
         return None
+
 
     def _create_empty_document(self):
         """Create empty document."""
         return ParsedDocument(document_type=DocumentType.cv, parsed_at=datetime.now())
 
+
     def _compute_file_hash(self, path):
         """Compute hash."""
         h = hashlib.sha256()
-        with open(path, "rb") as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                h.update(chunk)
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b""): h.update(chunk)
         return h.hexdigest()
 
+
     def _extract_text_from_pdf(self, path, max_pages=10):
-        """Extract text from PDF with Poppler/Tesseract support.
-
-        This function will:
-        - attempt to resolve a Poppler binary directory from POPPLER_PATH/POPPLER_BIN
-          or by locating `pdftoppm` on PATH;
-        - pass the `poppler_path` to pdf2image.convert_from_path when available;
-        - print debug info on failure to help troubleshooting.
-        """
+        """Extract text from PDF."""
         try:
-            import pytesseract
             from pdf2image import convert_from_path
-
-            # Auto-configure tesseract location for pytesseract:
-            # 1) TESSERACT_CMD env var (preferred)
-            # 2) locate tesseract on PATH via shutil.which
-            tesseract_cmd = os.environ.get("TESSERACT_CMD")
-            if not tesseract_cmd:
-                tesseract_cmd = shutil.which("tesseract") or shutil.which("tesseract.exe")
-            if tesseract_cmd:
-                try:
-                    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
-                except Exception:
-                    # Some pytesseract builds use a different import path; try safe set
-                    try:
-                        import pytesseract as _pt
-
-                        _pt.pytesseract.tesseract_cmd = tesseract_cmd
-                    except Exception:
-                        pass
-            # Debug tesseract resolution
-            try:
-                print(f"[OCR DEBUG] resolved tesseract_cmd={tesseract_cmd}")
-            except Exception:
-                pass
-
-            # Resolve poppler (pdftoppm) path. Priority:
-            # 1) POPPLER_PATH or POPPLER_BIN environment variable
-            # 2) locate pdftoppm on PATH
-            poppler_path = os.environ.get("POPPLER_PATH") or os.environ.get("POPPLER_BIN")
-            pdftoppm_path = None
-            if not poppler_path:
-                pdftoppm_path = shutil.which("pdftoppm") or shutil.which("pdftoppm.exe")
-                if pdftoppm_path:
-                    poppler_path = os.path.dirname(pdftoppm_path)
-
-            # If env var points directly to the executable, normalize to directory
-            if poppler_path and os.path.isfile(poppler_path) and poppler_path.lower().endswith(("pdftoppm", "pdftoppm.exe")):
-                poppler_path = os.path.dirname(poppler_path)
-
-            # Debug prints to help troubleshooting in dev
-            try:
-                print(f"[OCR DEBUG] resolved poppler_path={poppler_path}")
-                if not pdftoppm_path:
-                    pdftoppm_path = shutil.which("pdftoppm") or shutil.which("pdftoppm.exe")
-                print(f"[OCR DEBUG] shutil.which('pdftoppm')={pdftoppm_path}")
-                print(f"[OCR DEBUG] pytesseract import attempted")
-            except Exception:
-                pass
-
-            # Try convert; include poppler_path if available
-            try:
-                if poppler_path:
-                    images = convert_from_path(path, dpi=200, poppler_path=poppler_path)[:max_pages]
-                else:
-                    images = convert_from_path(path, dpi=200)[:max_pages]
-            except Exception as e:
-                # Provide richer debug info for the caller
-                import traceback
-
-                tb = traceback.format_exc()
-                debug_msg = (
-                    f"Unable to convert PDF to images. poppler_path={poppler_path}, pdftoppm_path={pdftoppm_path}, error={e}\n{tb}"
-                )
-                print(f"[OCR ERROR] {debug_msg}")
-                return f"[OCR ERROR: {e} | poppler_path={poppler_path} | pdftoppm={pdftoppm_path}]"
-
+            import pytesseract
+            images = convert_from_path(path, dpi=200)[:max_pages]
             text = ""
             for i, img in enumerate(images, 1):
                 print(f"  Page {i}/{len(images)}...")
-                text += pytesseract.image_to_string(img, lang="eng+ita") + "\n\n"
+                text += pytesseract.image_to_string(img, lang='eng+ita') + "\n\n"
             return text.strip()
         except Exception as e:
-            # Final fallback: return the exception message
-            import traceback
-
-            tb = traceback.format_exc()
-            print(f"[OCR FINAL ERROR] {e}\n{tb}")
             return f"[OCR ERROR: {e}]"
 
 
-print("=" * 80)
+print("="*80)
 """
-                    print(f"[OCR DEBUG] pytesseract import attempted")
+===============================================================================
 CELLA 6: VALIDATION & DISPLAY FUNCTIONS
 ===============================================================================
 Helper functions per validazione qualità e display risultati.
 """
 
-print("=" * 80)
+print("="*80)
 print("STEP 6: Creating Validation & Display Functions")
-print("=" * 80)
+print("="*80)
 
 
 def display_parsing_results(result: ParsedDocument, verbose: bool = True):
@@ -1932,19 +1595,20 @@ def display_parsing_results(result: ParsedDocument, verbose: bool = True):
         result: ParsedDocument object
         verbose: If True, show detailed information
     """
-    print("\n" + "=" * 80)
+    print("\n" + "="*80)
     print("PARSING RESULTS")
-    print("=" * 80)
+    print("="*80)
 
     # Document metadata
-    print("\n[Document Metadata]")
+    print(f"\n[Document Metadata]")
     print(f"  Document ID: {result.document_id}")
-    print(f"  Overall Confidence: {result.confidence_score:.2%}")
-    print(f"  Parsing Method: {result.parsing_method}")
-    print(f"  Parsed At: {result.parsed_at.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Overall Confidence: {getattr(result, 'confidence_score', 0.0):.2%}")
+    print(f"  Parsing Method: {getattr(result, 'parsing_method', '')}")
+    if getattr(result, 'parsed_at', None):
+        print(f"  Parsed At: {result.parsed_at.strftime('%Y-%m-%d %H:%M:%S')}")
 
     # Personal Info
-    print("\n[Personal Info]")
+    print(f"\n[Personal Info]")
     if result.personal_info.full_name:
         print(f"  Name: {result.personal_info.full_name}")
     if result.personal_info.email:
@@ -1952,9 +1616,7 @@ def display_parsing_results(result: ParsedDocument, verbose: bool = True):
     if result.personal_info.phone:
         print(f"  Phone: {result.personal_info.phone}")
     if result.personal_info.city:
-        loc = f"  Location: {result.personal_info.city}, "
-        loc += f"{result.personal_info.country or ''}"
-        print(loc)
+        print(f"  Location: {result.personal_info.city}, {result.personal_info.country or ''}")
     if result.personal_info.linkedin:
         print(f"  LinkedIn: {result.personal_info.linkedin}")
     if result.personal_info.github:
@@ -1962,85 +1624,71 @@ def display_parsing_results(result: ParsedDocument, verbose: bool = True):
 
     # Summary
     if result.summary:
-        print("\n[Professional Summary]")
-        summary_preview = (
-            result.summary[:150] + "..."
-            if len(result.summary) > 150
-            else result.summary
-        )
+        print(f"\n[Professional Summary]")
+        summary_preview = result.summary[:150] + "..." if len(result.summary) > 150 else result.summary
         print(f"  {summary_preview}")
 
     # Experience
-    print(f"\n[Work Experience]: {len(result.experience)} entries")
-    for i, exp in enumerate(result.experience, 1):
-        current_marker = " [CURRENT]" if exp.is_current else ""
-        line_head = f"  {i}. {exp.title or 'N/A'} @ {exp.company or 'N/A'}"
-        print(f"{line_head}{current_marker}")
+    print(f"\n[Work Experience]: {len(getattr(result, 'experience', []))} entries")
+    for i, exp in enumerate(getattr(result, 'experience', []), 1):
+        current_marker = " [CURRENT]" if getattr(exp, 'is_current', False) else ""
+        print(f"  {i}. {getattr(exp, 'title', 'N/A')} @ {getattr(exp, 'company', 'N/A')}{current_marker}")
         if verbose:
-            print(
-                f"     Period: {exp.start_date or 'N/A'} - {exp.end_date or 'Present'}"
-            )
-            print(f"     Location: {exp.city or 'N/A'}")
-            if exp.responsibilities:
-                print(f"     Responsibilities: {len(exp.responsibilities)} items")
+            print(f"     Period: {getattr(exp, 'start_date', 'N/A')} - {getattr(exp, 'end_date', 'Present')}")
+            print(f"     Location: {getattr(exp, 'city', 'N/A')}")
+            if getattr(exp, 'responsibilities', []):
+                print(f"     Responsibilities: {len(getattr(exp, 'responsibilities', []))} items")
 
     # Education
-    print(f"\n[Education]: {len(result.education)} entries")
-    for i, edu in enumerate(result.education, 1):
-        print(f"  {i}. {edu.degree or 'N/A'}")
+    print(f"\n[Education]: {len(getattr(result, 'education', []))} entries")
+    for i, edu in enumerate(getattr(result, 'education', []), 1):
+        print(f"  {i}. {getattr(edu, 'degree', 'N/A')}")
         if verbose:
-            print(f"     Institution: {edu.institution or 'N/A'}")
-            print(f"     Year: {edu.graduation_year or 'N/A'}")
-            if edu.gpa:
-                print(f"     GPA: {edu.gpa}")
+            print(f"     Institution: {getattr(edu, 'institution', 'N/A')}")
+            print(f"     Year: {getattr(edu, 'graduation_year', 'N/A')}")
+            if getattr(edu, 'gpa', None):
+                print(f"     GPA: {getattr(edu, 'gpa')}")
 
     # Skills
-    print(f"\n[Skills]: {len(result.skills)} entries")
+    print(f"\n[Skills]: {len(getattr(result, 'skills', []))} entries")
     if verbose:
-        for i, skill in enumerate(result.skills, 1):
-            source_marker = f"[{skill.source}]"
-            print(
-                f"  {i}. {skill.name} {source_marker} "
-                f"(confidence: {skill.confidence:.2f})"
-            )
+        for i, skill in enumerate(getattr(result, 'skills', []), 1):
+            source_marker = f"[{getattr(skill, 'source', '')}]"
+            print(f"  {i}. {getattr(skill, 'name', '')} {source_marker} (confidence: {getattr(skill, 'confidence', 0.0):.2f})")
     else:
-        for i, skill in enumerate(result.skills[:5], 1):
-            print(f"  {i}. {skill.name}")
-        if len(result.skills) > 5:
-            print(f"  ... and {len(result.skills) - 5} more")
+        for i, skill in enumerate(getattr(result, 'skills', [])[:5], 1):
+            print(f"  {i}. {getattr(skill, 'name', '')}")
+        if len(getattr(result, 'skills', [])) > 5:
+            print(f"  ... and {len(getattr(result, 'skills', [])) - 5} more")
 
     # Languages
-    print(f"\n[Languages]: {len(result.languages)} entries")
-    for i, lang in enumerate(result.languages, 1):
-        level_str = f" ({lang.level})" if lang.level else ""
-        cert_str = f" - {lang.certificate}" if lang.certificate else ""
-        year_str = f" ({lang.certificate_year})" if lang.certificate_year else ""
-        print(
-            f"  {i}. {lang.name}{level_str}{cert_str}"
-            f"{year_str}"
-        )
+    print(f"\n[Languages]: {len(getattr(result, 'languages', []))} entries")
+    for i, lang in enumerate(getattr(result, 'languages', []), 1):
+        level_str = f" ({getattr(lang, 'level', '')})" if getattr(lang, 'level', None) else ""
+        cert_str = f" - {getattr(lang, 'certificate', '')}" if getattr(lang, 'certificate', None) else ""
+        year_str = f" ({getattr(lang, 'certificate_year', '')})" if getattr(lang, 'certificate_year', None) else ""
+        print(f"  {i}. {getattr(lang, 'name', '')}{level_str}{cert_str}{year_str}")
 
     # Certifications
-    print(f"\n[Certifications]: {len(result.certifications)} entries")
-    for i, cert in enumerate(result.certifications, 1):
-        year_str = f" ({cert.date_obtained})" if cert.date_obtained else ""
-        cert_name = cert.name[:60] + "..." if len(cert.name) > 60 else cert.name
+    print(f"\n[Certifications]: {len(getattr(result, 'certifications', []))} entries")
+    for i, cert in enumerate(getattr(result, 'certifications', []), 1):
+        year_str = f" ({getattr(cert, 'date_obtained', '')})" if getattr(cert, 'date_obtained', None) else ""
+        cert_name = getattr(cert, 'name', '')
+        cert_name = cert_name[:60] + "..." if len(cert_name) > 60 else cert_name
         print(f"  {i}. {cert_name}{year_str}")
 
     # Preferences
-    print("\n[Job Preferences]")
-    if result.preferences:
-        if result.preferences.work_modality:
-            print(f"  Modality: {result.preferences.work_modality}")
-        if result.preferences.contract_type:
-            print(f"  Contract: {result.preferences.contract_type}")
-        if result.preferences.locations:
-            print(f"  Locations: {', '.join(result.preferences.locations)}")
-        if result.preferences.salary_min and result.preferences.salary_max:
-            print(
-                f"  Salary: {result.preferences.salary_min:,}-"
-                f"{result.preferences.salary_max:,} EUR/year"
-            )
+    print(f"\n[Job Preferences]")
+    prefs = getattr(result, 'preferences', None)
+    if prefs:
+        if getattr(prefs, 'work_modality', None):
+            print(f"  Modality: {getattr(prefs, 'work_modality')}")
+        if getattr(prefs, 'contract_type', None):
+            print(f"  Contract: {getattr(prefs, 'contract_type')}")
+        if getattr(prefs, 'locations', None):
+            print(f"  Locations: {', '.join(getattr(prefs, 'locations'))}")
+        if getattr(prefs, 'salary_min', None) and getattr(prefs, 'salary_max', None):
+            print(f"  Salary: {getattr(prefs, 'salary_min'):,}-{getattr(prefs, 'salary_max'):,} EUR/year")
     else:
         print("  None detected")
 
@@ -2053,7 +1701,7 @@ def display_parsing_results(result: ParsedDocument, verbose: bool = True):
     if verbose and result.all_spans:
         span_categories = {}
         for span in result.all_spans:
-            category = span.field.split("[")[0].split(".")[0]
+            category = span.field.split('[')[0].split('.')[0]
             span_categories[category] = span_categories.get(category, 0) + 1
         for category, count in span_categories.items():
             print(f"  - {category}: {count} spans")
@@ -2062,12 +1710,12 @@ def display_parsing_results(result: ParsedDocument, verbose: bool = True):
     if result.warnings:
         print(f"\n[Warnings]: {len(result.warnings)} issues")
         for i, warning in enumerate(result.warnings[:5], 1):
-            severity = warning.split(":")[0] if ":" in warning else "INFO"
+            severity = warning.split(':')[0] if ':' in warning else 'INFO'
             print(f"  [{severity}] {i}. {warning}")
         if len(result.warnings) > 5:
             print(f"  ... and {len(result.warnings) - 5} more")
     else:
-        print("\n[Status]: No warnings - parsing complete")
+        print(f"\n[Status]: No warnings - parsing complete")
 
 
 def compute_extraction_stats(result: ParsedDocument) -> dict:
@@ -2078,47 +1726,38 @@ def compute_extraction_stats(result: ParsedDocument) -> dict:
         Dictionary with statistics
     """
     stats = {
-        "total_text_length": len(result.full_text),
-        "counts": {
-            "experience": len(result.experience),
-            "education": len(result.education),
-            "skills": len(result.skills),
-            "languages": len(result.languages),
-            "certifications": len(result.certifications),
-            "projects": len(result.projects),
-            "spans": len(result.all_spans),
+        'total_text_length': len(result.full_text),
+        'counts': {
+            'experience': len(result.experience),
+            'education': len(result.education),
+            'skills': len(result.skills),
+            'languages': len(result.languages),
+            'certifications': len(result.certifications),
+            'projects': len(result.projects),
+            'spans': len(result.all_spans)
         },
-        "confidence_score": result.confidence_score,
-        "section_confidence": result.section_confidence,
-        "warnings_count": len(result.warnings),
-        "has_gdpr": result.gdpr_consent or False,
-        "has_preferences": result.preferences is not None,
-        "current_jobs": sum(1 for exp in result.experience if exp.is_current),
+        'confidence_score': result.confidence_score,
+        'section_confidence': result.section_confidence,
+        'warnings_count': len(result.warnings),
+        'has_gdpr': result.gdpr_consent or False,
+        'has_preferences': result.preferences is not None,
+        'current_jobs': sum(1 for exp in result.experience if exp.is_current)
     }
 
     # Population rate (% of non-empty sections)
-    # number of top-level sections considered for population rate
-    total_sections = 8
+    total_sections = 8  # experience, education, skills, languages, certs, summary, preferences, personal_info
     populated_sections = 0
 
-    if len(result.experience) > 0:
-        populated_sections += 1
-    if len(result.education) > 0:
-        populated_sections += 1
-    if len(result.skills) > 0:
-        populated_sections += 1
-    if len(result.languages) > 0:
-        populated_sections += 1
-    if len(result.certifications) > 0:
-        populated_sections += 1
-    if result.summary:
-        populated_sections += 1
-    if result.preferences:
-        populated_sections += 1
-    if result.personal_info.full_name or result.personal_info.email:
-        populated_sections += 1
+    if len(result.experience) > 0: populated_sections += 1
+    if len(result.education) > 0: populated_sections += 1
+    if len(result.skills) > 0: populated_sections += 1
+    if len(result.languages) > 0: populated_sections += 1
+    if len(result.certifications) > 0: populated_sections += 1
+    if result.summary: populated_sections += 1
+    if result.preferences: populated_sections += 1
+    if result.personal_info.full_name or result.personal_info.email: populated_sections += 1
 
-    stats["population_rate"] = populated_sections / total_sections
+    stats['population_rate'] = populated_sections / total_sections
 
     return stats
 
@@ -2130,72 +1769,65 @@ def validate_parsing_quality(result: ParsedDocument) -> dict:
     Returns:
         Dictionary with validation results
     """
-    report = {"critical_issues": [], "warnings": [], "info": [], "passed_checks": []}
+    report = {
+        'critical_issues': [],
+        'warnings': [],
+        'info': [],
+        'passed_checks': []
+    }
 
     # Critical checks
     if not result.personal_info.full_name:
-        report["critical_issues"].append("Missing full_name")
+        report['critical_issues'].append("Missing full_name")
     else:
-        report["passed_checks"].append("[PASS] Full name present")
+        report['passed_checks'].append("[PASS] Full name present")
 
     if not result.personal_info.email:
-        report["critical_issues"].append("Missing email")
+        report['critical_issues'].append("Missing email")
     else:
-        report["passed_checks"].append("[PASS] Email present")
+        report['passed_checks'].append("[PASS] Email present")
 
     if len(result.experience) == 0:
-        report["critical_issues"].append("No experience entries")
+        report['critical_issues'].append("No experience entries")
     else:
-        report["passed_checks"].append(
-            f"[PASS] Experience: {len(result.experience)} entries"
-        )
+        report['passed_checks'].append(f"[PASS] Experience: {len(result.experience)} entries")
 
     if len(result.education) == 0:
-        report["critical_issues"].append("No education entries")
+        report['critical_issues'].append("No education entries")
     else:
-        report["passed_checks"].append(
-            f"[PASS] Education: {len(result.education)} entries"
-        )
+        report['passed_checks'].append(f"[PASS] Education: {len(result.education)} entries")
 
     # Warnings
     if len(result.skills) < 3:
-        report["warnings"].append(
-            f"Low skill count: {len(result.skills)} (expected 3+)"
-        )
+        report['warnings'].append(f"Low skill count: {len(result.skills)} (expected 3+)")
     else:
-        report["passed_checks"].append(f"[PASS] Skills: {len(result.skills)} entries")
+        report['passed_checks'].append(f"[PASS] Skills: {len(result.skills)} entries")
 
     if len(result.languages) == 0:
-        report["warnings"].append("No languages detected")
+        report['warnings'].append("No languages detected")
     else:
-        report["passed_checks"].append(
-            f"[PASS] Languages: {len(result.languages)} entries"
-        )
+        report['passed_checks'].append(f"[PASS] Languages: {len(result.languages)} entries")
 
     if result.confidence_score < 0.7:
-        report["warnings"].append(f"Low confidence: {result.confidence_score:.2%}")
+        report['warnings'].append(f"Low confidence: {result.confidence_score:.2%}")
     else:
-        report["passed_checks"].append(
-            f"[PASS] Confidence: {result.confidence_score:.2%}"
-        )
+        report['passed_checks'].append(f"[PASS] Confidence: {result.confidence_score:.2%}")
 
     # Info
     if len(result.all_spans) < 10:
-        report["info"].append(f"Limited spans: {len(result.all_spans)} (expected 10+)")
+        report['info'].append(f"Limited spans: {len(result.all_spans)} (expected 10+)")
     else:
-        report["passed_checks"].append(
-            f"[PASS] Spans: {len(result.all_spans)} extracted"
-        )
+        report['passed_checks'].append(f"[PASS] Spans: {len(result.all_spans)} extracted")
 
     if not result.preferences:
-        report["info"].append("No job preferences detected")
+        report['info'].append("No job preferences detected")
     else:
-        report["passed_checks"].append("[PASS] Job preferences extracted")
+        report['passed_checks'].append("[PASS] Job preferences extracted")
 
     if not result.gdpr_consent:
-        report["info"].append("No GDPR consent detected")
+        report['info'].append("No GDPR consent detected")
     else:
-        report["passed_checks"].append("[PASS] GDPR consent detected")
+        report['passed_checks'].append("[PASS] GDPR consent detected")
 
     return report
 
@@ -2203,28 +1835,28 @@ def validate_parsing_quality(result: ParsedDocument) -> dict:
 def print_validation_report(report: dict):
     """Print validation report in a formatted way."""
 
-    if report["critical_issues"]:
+    if report['critical_issues']:
         print("\n[CRITICAL ISSUES]")
-        for issue in report["critical_issues"]:
+        for issue in report['critical_issues']:
             print(f"  - {issue}")
 
-    if report["warnings"]:
+    if report['warnings']:
         print("\n[WARNINGS]")
-        for warning in report["warnings"]:
+        for warning in report['warnings']:
             print(f"  - {warning}")
 
-    if report["info"]:
+    if report['info']:
         print("\n[INFO]")
-        for info in report["info"]:
+        for info in report['info']:
             print(f"  - {info}")
 
-    if report["passed_checks"]:
+    if report['passed_checks']:
         print("\n[PASSED CHECKS]")
-        for check in report["passed_checks"]:
+        for check in report['passed_checks']:
             print(f"  {check}")
 
     # Overall status
-    if not report["critical_issues"]:
+    if not report['critical_issues']:
         print("\n[OVERALL STATUS]: PASS")
     else:
         print("\n[OVERALL STATUS]: FAIL (critical issues found)")
@@ -2236,6 +1868,7 @@ print("  * compute_extraction_stats()")
 print("  * validate_parsing_quality()")
 print("  * print_validation_report()")
 
-print("\n" + "=" * 80)
+print("\n" + "="*80)
 print("VALIDATION FUNCTIONS READY")
-print("=" * 80)
+print("="*80)
+

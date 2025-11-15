@@ -1,8 +1,4 @@
 import os
-
-# Use relative imports so this module works when loaded as
-# `backend.app.main:app` (avoids relying on a top-level `app` package
-# being on sys.path during development/runtime).
 from .api.parse import router as parse_router
 from .api.embeddings import router as embeddings_router
 from .api.jd import router as jd_router
@@ -10,35 +6,14 @@ from .database import get_db
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from opentelemetry import metrics, trace
-from opentelemetry.exporter.prometheus import PrometheusMetricReader
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from .core.metrics import meter, tracer
+from .core.service_endpoints import router as service_router
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-resource = Resource.create(
-    {"service.name": "piazzati-backend", "service.version": "1.0.0"}
-)
-
-prometheus_reader = PrometheusMetricReader(
-    disable_target_info=True  # Disabilita target_info che causa problemi di parsing
-)
-meter_provider = MeterProvider(metric_readers=[prometheus_reader], resource=resource)
-metrics.set_meter_provider(meter_provider)  # imposto il provider globale
-
-tracer_provider = TracerProvider()  # tracce: richieste propagate nell'app
-trace.set_tracer_provider(tracer_provider)  # imposto il provider globale
-
-
-# Get meter and tracer dal modulo corrente "__name__"
-meter = metrics.get_meter(__name__)
-tracer = trace.get_tracer(__name__)
 
 app = FastAPI(title="PiazzaTi Backend", version="1.0.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -57,120 +32,14 @@ FastAPIInstrumentor.instrument_app(app)
 SQLAlchemyInstrumentor().instrument()
 Psycopg2Instrumentor().instrument()
 
+# Register service endpoints router
+app.include_router(service_router)
+
 # metriche personalizzate:
-request_count = meter.create_counter(
-    "piazzati_custom_requests_total",
-    description="Total number of requests tracked by custom counter",
-    unit="1",
-)
-
-request_duration = meter.create_histogram(
-    "piazzati_custom_request_duration_seconds",
-    description="Request duration in seconds tracked by custom histogram",
-    unit="s",
-)
-
-database_operations = meter.create_counter(
-    "piazzati_custom_database_operations_total",
-    description="Total number of database operations tracked by custom counter",
-    unit="1",
-)
-
-active_users = meter.create_up_down_counter(
-    "piazzati_custom_active_users",
-    description="Number of active users tracked by custom counter",
-    unit="1",
-)
 
 
 @app.get("/")
-async def root(request: Request):
-    accept = request.headers.get("accept", "")
-    if "application/json" in accept:
-        return {"message": "Benvenuto su PiazzaTi!", "image": "/static/PIAZZATI.IT.png"}
-    return HTMLResponse(
-        """
-        <html>
-            <head>
-                <title>PiazzaTi</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    html, body {
-                        height: 100%;
-                        margin: 0;
-                        padding: 0;
-                    }
-                    body {
-                        height: 100vh;
-                        width: 100vw;
-                        background: #222;
-                        overflow: hidden;
-                        position: relative;
-                    }
-                    .full-img {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        width: 100vw;
-                        height: 100vh;
-                        object-fit: cover;
-                        display: block;
-                        margin: 0;
-                        border: none;
-                        max-width: 100vw;
-                        max-height: 100vh;
-                    }
-                    @media (max-width: 600px) {
-                        .full-img {
-                            width: 100vw;
-                            height: 100vh;
-                            object-fit: contain;
-                        }
-                    }
-                </style>
-            </head>
-            <body>
-                <img
-                    src='/static/PIAZZATI.IT.png'
-                    alt='Immagine PiazzaTi'
-                    class='full-img'
-                >
-            </body>
-        </html>
-        """
-    )
+async def root():
+    return {"message": "Benvenuto su PiazzaTi!"}
 
 
-@app.get("/metrics")
-async def get_metrics():
-    """Endpoint per le metriche Prometheus"""
-    from fastapi import Response
-
-    data = generate_latest()
-    return Response(content=data, media_type=CONTENT_TYPE_LATEST)
-
-
-@app.get("/health")
-async def health_check():
-    """Endpoint per verificare lo stato dell'applicazione"""
-    request_count.add(1, {"endpoint": "/health", "method": "GET"})
-    database_url = os.getenv("DATABASE_URL")
-    return {
-        "status": "healthy",
-        "database_configured": bool(database_url),
-        "database_url_preview": (database_url[:30] + "..." if database_url else None),
-    }
-
-
-@app.get("/db-test")
-async def test_database_connection(db: Session = Depends(get_db)):
-    """Endpoint per testare la connessione al database"""
-    request_count.add(1, {"endpoint": "/db-test", "method": "GET"})
-    try:
-        # Esegui una query semplice per testare la connessione
-        database_operations.add(1, {"operation": "test_query"})
-        db.execute(text("SELECT 1"))
-        return {"status": "database_connected", "result": "OK"}
-    except Exception as e:
-        database_operations.add(1, {"operation": "test_query_error"})
-        return {"status": "database_error", "error": str(e)}
