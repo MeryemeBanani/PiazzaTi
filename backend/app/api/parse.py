@@ -32,7 +32,7 @@ _task_results = {}
 def get_parser() -> OllamaCVParser:
     global _parser
     if _parser is None:
-        _parser = OllamaCVParser(model="llama3.1:8b")
+        _parser = OllamaCVParser(model="llama3.2:3b")
     return _parser
 
 

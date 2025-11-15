@@ -70,7 +70,7 @@ from langchain_community.llms import Ollama
 class OllamaCVParser:
     """Parser v1.7.4 with enhanced description generation."""
 
-    def __init__(self, model: str = "llama3.1:8b", base_url: str = None):
+    def __init__(self, model: str = "llama3.2:3b", base_url: str = None):
         self.model = model
         self.base_url = (
             base_url or os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434"
