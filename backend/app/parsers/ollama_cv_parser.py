@@ -24,14 +24,7 @@ from ..schemas.parsed_document import (
     Span,
 )
 
-# Import LLM client con fallback
-try:
-    from langchain_ollama import OllamaLLM as Ollama
-except Exception:
-    try:
-        from langchain_community.llms import Ollama
-    except Exception:
-        Ollama = None
+from langchain_ollama import OllamaLLM as Ollama
 
 import os
 import time
@@ -77,24 +70,19 @@ class OllamaCVParser:
         )
         print(f"Initializing parser v1.7.4 FINAL...")
         print(f"  Using Ollama base_url: {self.base_url}")
-        # Instanzia LLM client se disponibile
-        if Ollama is not None:
-            try:
-                self.llm = Ollama(
-                    model=model,
-                    base_url=self.base_url,
-                    temperature=0.0,
-                    num_predict=12000,
-                    top_k=10,
-                    top_p=0.9,
-                    repeat_penalty=1.1,
-                )
-                print(f"  ✅ LLM client initialized successfully (model: {model})")
-            except Exception as e:
-                print(f"  ❌ Failed to initialize Ollama client: {e}")
-                self.llm = None
-        else:
-            print(f"  ❌ Ollama library not available")
+        try:
+            self.llm = Ollama(
+                model=model,
+                base_url=self.base_url,
+                temperature=0.0,
+                num_predict=12000,
+                top_k=10,
+                top_p=0.9,
+                repeat_penalty=1.1,
+            )
+            print(f"  ✅ LLM client initialized successfully (model: {model})")
+        except Exception as e:
+            print(f"  ❌ Failed to initialize Ollama client: {e}")
             self.llm = None
 
         self._init_language_database()
