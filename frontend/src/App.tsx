@@ -435,7 +435,7 @@ export default function App() {
                         <span>Ollama AI sta analizzando il CV...</span>
                       </div>
                       <div className="text-xs text-gray-500">
-                        Modello: llama3.2:3b
+                        Modello: llama3.1:8b
                       </div>
                     </div>
                   </div>

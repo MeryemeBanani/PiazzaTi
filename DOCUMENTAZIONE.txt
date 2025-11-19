@@ -4,22 +4,26 @@ DOCUMENTAZIONE - Resoconto operativo (aggiornamento 2025-10-26)
 Questo file è stato aggiornato per registrare le operazioni eseguite per rendere il backend "PiazzaTi" stabile e riproducibile su server di produzione (venv + systemd + DB via Docker). Le note seguenti descrivono i passaggi effettuati, i file toccati, i comandi chiave e i prossimi step suggeriti.
 
 1) Obiettivi principali
-- Eseguire il backend FastAPI (uvicorn) in un virtualenv di progetto e gestirlo con systemd come servizio non-root.
-- Assicurare connettività stabile al database PostgreSQL eseguito via Docker Compose (mappato su porta host 5433).
-- Persistenza dello storage usato da Ollama e pull del modello `llama3.1:8b`.
-- Ripulire e installare le dipendenze Python (recovery di requirements corrotti).
+- Backend FastAPI (uvicorn) containerizzato, orchestrato via Docker Compose, nessuna porta esposta direttamente.
+- Database PostgreSQL 15.14 + pgvector gestito via Docker Compose, porta host 5433.
+- Ollama LLM Service containerizzato, modello usato: `llama3.2:3b` (unico disponibile e supportato).
+- Monitoring stack completo: Prometheus, Grafana, Node Exporter, cAdvisor, PostgreSQL Exporter.
+- CI/CD automatizzato con GitHub Actions, deploy su Scaleway Container Service.
+- Sicurezza: network isolation, container non-root, rate limiting, SSL/TLS, backup automatici.
 
 2) Azioni eseguite (sintesi)
-- Creazione del virtualenv di progetto: `/opt/piazzati/backend/.venv` e installazione dei pacchetti critici (in particolare `psycopg2-binary==2.9.11`).
-- Correzione del file di environment `/opt/piazzati/backend/.env`: la variabile `DATABASE_URL` è stata scritta con valore letterale (es. `postgresql://piazzati_user:piazzati_password@localhost:5433/db_piazzati`) perché systemd NON espande `${VAR}` in `EnvironmentFile`.
-- Aggiunta e deploy del systemd unit file per il backend (repo: `deploy/piazzati-backend.service`) che esegue uvicorn dal venv e usa `EnvironmentFile=/opt/piazzati/backend/.env`.
-- Identificazione e rimozione di processi uvicorn confliggenti; creazione dello script di amministrazione `deploy/restart_backend.sh` per stoppare processi errati e avviare il corretto.
-- Avvio / ripristino del container Postgres tramite `docker compose up -d postgres` (service mappa container port 5432 -> host 5433). Verificata la salute del container e apertura della porta host 5433.
-- Recupero/cleaning del file `requirements.clean.txt` (contenente NUL/UTF-16): generata una copia ripulita `requirements.clean.recovered.txt` e installate le dipendenze nel venv.
+- Tutti i servizi (backend, database, Ollama, monitoring) sono gestiti via Docker Compose, con risorse ottimizzate per GP1-XS.
+- Il backend non espone porte pubbliche: accesso solo tramite Nginx reverse proxy.
+- Il modello LLM usato è `llama3.2:3b`, scaricato e gestito solo tramite Ollama container.
+- Il database PostgreSQL + pgvector è configurato con schema hardening, indici, constraint, trigger automatici.
+- Monitoring stack attivo: Prometheus raccoglie metriche da tutti i servizi, Grafana visualizza dashboard e alert.
+- CI/CD: workflow GitHub Actions aggiorna e deploya automaticamente su Scaleway, con healthcheck via Nginx.
 
-3) Hardening systemd per evitare race a boot
-- Aggiunto drop-in `wait-db.conf` in `/etc/systemd/system/piazzati-backend.service.d/` con `ExecStartPre` che attende la presenza del bind sulla porta host 5433 (30s timeout). Questo previene l'avvio del backend prima che Docker abbia esposto la porta.
-- Aggiunto drop-in `restart.conf` con `Restart=on-failure` e `RestartSec=5` per stabilizzare i riavvii e prevenire flapping troppo rapido.
+3) Sicurezza e hardening
+- Nessuna porta backend esposta, solo reverse proxy Nginx.
+- Network isolation tra container, container non-root.
+- Rate limiting e SSL/TLS su Nginx per protezione DDoS e sicurezza API.
+- Backup automatici database e monitoring.
 
 4) Verifiche e output rilevanti
 - Endpoints verificati in esecuzione sul nodo host (via Uvicorn):

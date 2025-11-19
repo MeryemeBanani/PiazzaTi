@@ -1,0 +1,50 @@
+PiazzaTi - Componenti del Progetto
+=================================
+
+1. Backend (FastAPI, Python)
+   - API REST per parsing CV, gestione utenti, embedding, ricerca.
+   - Integrazione con Ollama per LLM (modello llama3.2:3b).
+   - Database PostgreSQL con estensione pgvector per embedding.
+   - Modularizzazione: app, models, schemas, services, utils, tests.
+   - Sicurezza: nessuna esposizione diretta della porta backend.
+
+2. Frontend (React, TypeScript)
+   - Interfaccia utente per upload CV, visualizzazione risultati, polling task.
+   - Visualizzazione parsing, progress bar, copia JSON, tag utente.
+   - Connessione alle API backend tramite Nginx reverse proxy.
+
+3. Ollama (LLM Service)
+   - Container dedicato per inferenza LLM.
+   - Modello configurato: llama3.2:3b.
+   - Gestione modelli tramite script e variabili ambiente.
+
+4. Database (PostgreSQL + pgvector)
+   - Storage dati utenti, CV, embedding, log.
+   - Ottimizzato per query vettoriali e batch processing.
+
+5. Nginx (Reverse Proxy)
+   - Proxy sicuro tra frontend e backend.
+   - Espone solo endpoint pubblici, nasconde porte interne.
+
+6. Monitoring (Grafana, Prometheus)
+   - Dashboard per metriche CPU, RAM, healthcheck, status app.
+   - Alerting e regole custom.
+
+7. CI/CD & Deploy
+   - Workflow GitHub Actions per build, test, deploy su Scaleway.
+   - Healthcheck via Nginx.
+   - Script di backup, migrazione, hardening.
+
+8. Sicurezza & Hardening
+   - Nessuna porta backend esposta.
+   - Configurazioni dedicate per ambiente produzione.
+   - Script di security-hardening e backup.
+
+9. Documentazione
+   - README, guide deploy, diagrammi DB, note tecniche.
+
+10. Configurazione
+    - docker-compose per orchestrazione servizi.
+    - Variabili ambiente per modelli, DB, worker, risorse.
+
+Tutte le componenti sono ottimizzate per istanza Scaleway GP1-XS (4 core, 16GB RAM).
