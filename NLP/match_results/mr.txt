@@ -1,0 +1,1 @@
+Qui vengono salvati i file estratti dallo script di matching (Rank) per poi inviarle al modulo rerank
