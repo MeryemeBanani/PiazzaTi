@@ -346,12 +346,11 @@ def main():
 
         setup_directories()
 
+        # === CV FLOW ===
         cv_df, cv_stats = process_cv_dataset()
-        jd_df, jd_stats = process_jd_dataset()
-
         cv_columns = [
             'user_id',
-            'document_type',  # ← AGGIUNTO
+            'document_type',
             'embedding_vector',
             'text_content',
             'model_name',
@@ -361,9 +360,24 @@ def main():
         ]
         save_embeddings(cv_df, CV_OUTPUT, 'user_id', cv_columns)
 
+        # === JD FLOW ===
+        # Normalizza JD dataset
+        try:
+            from normalizzatore import normalize_jd_dataset, SkillOntology, DATASET_DIR, OUTPUT_DIR
+            ontology_path = DATASET_DIR / "skill_ontology.json"
+            input_jd = DATASET_DIR / "jd_dataset.csv"
+            output_jd = OUTPUT_DIR / "jd_dataset_normalized.csv"
+            ontology = SkillOntology(ontology_path)
+            normalize_jd_dataset(input_jd, output_jd, ontology)
+            logger.info(f"JD dataset normalizzato: {output_jd}")
+        except Exception as e:
+            logger.warning(f"JD normalization skipped or failed: {e}")
+
+        # Genera embeddings JD
+        jd_df, jd_stats = process_jd_dataset()
         jd_columns = [
             'jd_id',
-            'document_type',  
+            'document_type',
             'embedding_vector',
             'text_content',
             'model_name',

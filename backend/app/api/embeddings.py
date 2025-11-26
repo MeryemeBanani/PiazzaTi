@@ -120,15 +120,7 @@ async def store_embedding(
             model_name=request.model_name,
             overwrite=request.overwrite
         )
-        # Trigger automatic matching after embedding save
-        import subprocess
-        try:
-            subprocess.run([
-                "python", "NLP/Matching.py"
-            ], cwd="c:/Users/Merye/Desktop/LA_PIAZZA/PiazzaTi")
-            print("Matching engine triggered after embedding save.")
-        except Exception as e:
-            print(f"Errore trigger matching: {e}")
+        # Matching is now triggered only by scheduled batch jobs, not by API calls.
         
         return EmbeddingResponse(
             id=embedding_record.id,
@@ -164,15 +156,7 @@ async def store_from_script(
             embedding_vector=script_output.embedding,
             model_name=script_output.model_name
         )
-        # Trigger automatic matching after embedding save
-        import subprocess
-        try:
-            subprocess.run([
-                "python", "NLP/Matching.py"
-            ], cwd="c:/Users/Merye/Desktop/LA_PIAZZA/PiazzaTi")
-            print("Matching engine triggered after embedding save.")
-        except Exception as e:
-            print(f"Errore trigger matching: {e}")
+        # Matching is now triggered only by scheduled batch jobs, not by API calls.
         
         return EmbeddingResponse(
             id=embedding_record.id,

@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 import os
@@ -20,6 +19,7 @@ async def upload_jd(request: Request):
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(jd_data, f, ensure_ascii=False, indent=2)
         print(f"[JD UPLOAD] File salvato: {filepath}", file=sys.stderr)
+        # Ora la generazione embedding JD e il matching sono gestiti solo dal batch processor.
         return JSONResponse({"status": "ok", "filename": filename})
     except PermissionError as e:
         print(f"[JD UPLOAD] PermissionError: {e}", file=sys.stderr)
