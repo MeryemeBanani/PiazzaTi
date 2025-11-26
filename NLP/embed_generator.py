@@ -37,11 +37,14 @@ BATCH_SIZE = 32
 CV_FIELDS = ["summary", "experience", "skills"]
 JD_FIELDS = ["title", "description", "requirements", "nice_to_have"]
 
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / "embed_generator.log"
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/usr/local/lib/ollama/tmp/embed_generator.log'),
+        logging.FileHandler(str(LOG_FILE)),
         logging.StreamHandler()
     ]
 )

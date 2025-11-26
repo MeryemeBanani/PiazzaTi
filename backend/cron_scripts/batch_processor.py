@@ -26,15 +26,15 @@ logging.basicConfig(
 
 BACKEND_PATH = Path(__file__).parent.parent / "backend"
 NLP_PATH = Path(__file__).parent / "NLP"
-
-NLP_MODULE_PATH = str(Path(__file__).parent.parent.parent / "NLP")
+import os
+NLP_MODULE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'NLP'))
 if NLP_MODULE_PATH not in sys.path:
     sys.path.append(NLP_MODULE_PATH)
 
 try:
-    import NLP.cv_json_to_dataset_processor
-    import NLP.normalizzatore
-    import NLP.embed_generator
+    import cv_json_to_dataset_processor
+    import normalizzatore
+    import embed_generator
     logging.info("Moduli NLP importati con successo")
 except ImportError as e:
     logging.error(f"Errore import moduli NLP: {e}")
@@ -75,11 +75,11 @@ class JDBatchProcessor:
         # Step 2: Normalizzazione JD
         logging.info("Step 2: Normalizzazione JD")
         try:
-            ontology_path = NLP.normalizzatore.DATASET_DIR / "skill_ontology.json"
-            input_jd = NLP.normalizzatore.DATASET_DIR / "jd_dataset.csv"
-            output_jd = NLP.normalizzatore.OUTPUT_DIR / "jd_dataset_normalized.csv"
-            ontology = NLP.normalizzatore.SkillOntology(ontology_path)
-            NLP.normalizzatore.normalize_jd_dataset(input_jd, output_jd, ontology)
+            ontology_path = normalizzatore.DATASET_DIR / "skill_ontology.json"
+            input_jd = normalizzatore.DATASET_DIR / "jd_dataset.csv"
+            output_jd = normalizzatore.OUTPUT_DIR / "jd_dataset_normalized.csv"
+            ontology = normalizzatore.SkillOntology(ontology_path)
+            normalizzatore.normalize_jd_dataset(input_jd, output_jd, ontology)
             logging.info(f"JD normalizzato: {output_jd}")
         except Exception as e:
             logging.error(f"JD normalization failed: {e}")
@@ -87,8 +87,8 @@ class JDBatchProcessor:
         # Step 3: Embeddings JD
         logging.info("Step 3: Generazione Embeddings JD")
         try:
-            jd_df, jd_stats = NLP.embed_generator.process_jd_dataset()
-            logging.info(f"Embeddings JD generati: {NLP.embed_generator.JD_OUTPUT}")
+            jd_df, jd_stats = embed_generator.process_jd_dataset()
+            logging.info(f"Embeddings JD generati: {embed_generator.JD_OUTPUT}")
         except Exception as e:
             logging.error(f"JD embedding generation failed: {e}")
 
@@ -229,7 +229,7 @@ class CVBatchProcessor:
         """Step 2: Normalizza il dataset usando normalizzatore.py."""
         
         # Controlla se esiste il CSV di input
-        input_csv = self.dataset_path / NLP.cv_json_to_dataset_processor.OUTPUT_FILENAME
+        input_csv = self.dataset_path / cv_json_to_dataset_processor.OUTPUT_FILENAME
         if not input_csv.exists():
             raise FileNotFoundError(f"CV dataset non trovato: {input_csv}")
         
@@ -243,7 +243,7 @@ class CVBatchProcessor:
         try:
             # Esegui normalizzazione
             print(f"   🔄 Normalizzazione in corso...")
-            NLP.normalizzatore.main()
+            normalizzatore.main()
             
             # Controlla output
             output_csv = self.output_path / "cv_dataset_normalized.csv"
@@ -273,7 +273,7 @@ class CVBatchProcessor:
         try:
             # Esegui generazione embeddings
             print(f"   🔄 Generazione embeddings...")
-            NLP.embed_generator.main()
+            embed_generator.main()
             
             # Controlla output
             embeddings_dir = NLP_PATH / "embeddings"
@@ -293,7 +293,7 @@ class CVBatchProcessor:
         print(f"{'='*50}")
         
         # Dataset files
-        dataset_csv = self.dataset_path / NLP.cv_json_to_dataset_processor.OUTPUT_FILENAME
+        dataset_csv = self.dataset_path / cv_json_to_dataset_processor.OUTPUT_FILENAME
         normalized_csv = self.output_path / "cv_dataset_normalized.csv"
         embeddings_csv = NLP_PATH / "embeddings" / "cv_embeddings.csv"
         
