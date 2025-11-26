@@ -19,8 +19,8 @@ warnings.filterwarnings('ignore')
 
 # Config paths
 BASE_DIR = Path.cwd()
-EMBEDDINGS_DIR = BASE_DIR / "embeddings"
-OUTPUT_DIR = BASE_DIR / "match_results"
+EMBEDDINGS_DIR = BASE_DIR / "NLP"/ "embeddings"
+OUTPUT_DIR = BASE_DIR / "NLP" / "match_results"
 
 # Config params
 TOP_K = 20
