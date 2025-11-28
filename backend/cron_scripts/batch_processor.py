@@ -1,345 +1,283 @@
 #!/usr/bin/env python3
 """
-Script di Batch Processing per CV con modulo NLP completo.
-Esegue la pipeline completa: JSON → CSV → Normalizzazione → Embeddings
+Batch Processor per CV/JD con pipeline NLP completa
+Struttura progetto attesa:
 
-Uso:
-    python batch_processor.py --process-today
-    python batch_processor.py --process-date 2025-11-12
-    python batch_processor.py --process-all
+project_root/
+    cron_scripts/
+        batch_processor.py  ← questo file
+    NLP/
+        cv_json_to_dataset_processor.py
+        normalizzatore.py
+        embed_generator.py
+        Matching.py
+        Dataset/
+        data/
+
+Questo script usa SUBPROCESS per eseguire gli script sotto NLP (modalità B).
 """
 
+from __future__ import annotations
 
 import sys
 import argparse
 from pathlib import Path
-from datetime import datetime, timedelta
-import json
+from datetime import datetime
 import logging
+import subprocess
+from typing import List
 
-# Configura logging
+# -----------------------------
+# Logging
+# -----------------------------
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s',
+    format="%(asctime)s %(levelname)s %(message)s",
     handlers=[logging.StreamHandler()]
 )
+logger = logging.getLogger(__name__)
 
-BACKEND_PATH = Path(__file__).parent.parent / "backend"
-NLP_PATH = Path(__file__).parent / "NLP"
-import os
-NLP_MODULE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'NLP'))
-if NLP_MODULE_PATH not in sys.path:
-    sys.path.append(NLP_MODULE_PATH)
+# -----------------------------
+# Paths (assume cron_scripts/ is current file parent)
+# project_root/
+#     cron_scripts/
+#     NLP/
+# -----------------------------
+HERE = Path(__file__).resolve().parent            # cron_scripts/
+PROJECT_ROOT = HERE.parent.parent                         # project_root/
+NLP_PATH = PROJECT_ROOT / "NLP"
+BACKEND_PATH = PROJECT_ROOT / "backend"
 
-try:
-    import cv_json_to_dataset_processor
-    import normalizzatore
-    import embed_generator
-    logging.info("Moduli NLP importati con successo")
-except ImportError as e:
-    logging.error(f"Errore import moduli NLP: {e}")
-    sys.exit(1)
+logger.info("Project root: %s", PROJECT_ROOT)
+logger.info("NLP path: %s", NLP_PATH)
+logger.info("Backend path: %s", BACKEND_PATH)
 
+# Ensure NLP_PATH exists
+if not NLP_PATH.exists():
+    logger.error("NLP folder non trovata: %s", NLP_PATH)
+    # Non uscire subito: permettiamo all'utente di lanciare per testare
 
+# Utility to run python scripts under NLP/ with subprocess
 
-# JD Batch Processor:
+def run_nlp_script(script_name: str, args: List[str] | None = None) -> subprocess.CompletedProcess:
+    """Esegue lo script Python presente sotto NLP_PATH con lo stesso interprete.
+    Ritorna CompletedProcess.
+    """
+    script_path = NLP_PATH / script_name
+    if not script_path.exists():
+        raise FileNotFoundError(f"Script non trovato: {script_path}")
+
+    cmd = [sys.executable, str(script_path)]
+    if args:
+        cmd.extend(args)
+
+    logger.info("Eseguo: %s", " ".join(cmd))
+    result = subprocess.run(cmd, cwd=str(NLP_PATH), capture_output=True, text=True)
+    if result.returncode != 0:
+        logger.error("Script %s fallito (code %d). stderr:%s", script_name, result.returncode, result.stderr.strip())
+    else:
+        logger.info("Script %s completato. stdout len=%d", script_name, len(result.stdout))
+    return result
+
+# -----------------------------
+# JD Batch Processor
+# -----------------------------
 class JDBatchProcessor:
     def __init__(self):
         self.jds_path = NLP_PATH / "data" / "jds"
         self.dataset_path = NLP_PATH / "Dataset"
-        self.output_path = NLP_PATH / "Dataset" / "normalized"
-        self.csv_processor = NLP_PATH / "jd_json_to_dataset_processor.py"
-        logging.info(f"JD Batch processor inizializzato")
-        logging.info(f"   JDs path: {self.jds_path}")
-        logging.info(f"   Dataset path: {self.dataset_path}")
+        self.output_path = self.dataset_path / "normalized"
+        self.csv_script = "jd_json_to_dataset_processor.py"
 
     def process(self):
-        logging.info("="*80)
-        logging.info("BATCH PROCESSING JD - PIPELINE NLP COMPLETA")
-        logging.info("="*80)
+        logger.info("%s", "=" * 80)
+        logger.info("BATCH PROCESSING JD - PIPELINE NLP COMPLETA")
+        logger.info("%s", "=" * 80)
 
-        # Step 1: JSON → CSV
-        logging.info("Step 1: Conversione JSON → CSV JD")
-        import subprocess
-        if self.csv_processor.exists():
-            result = subprocess.run([
-                sys.executable, str(self.csv_processor)
-            ], cwd=str(self.csv_processor.parent), capture_output=True, text=True)
-            if result.returncode == 0:
-                logging.info("JD CSV creato.")
-            else:
-                logging.error(f"Errore JD CSV: {result.stderr}")
-        else:
-            logging.error(f"jd_json_to_dataset_processor.py non trovato: {self.csv_processor}")
-
-        # Step 2: Normalizzazione JD
-        logging.info("Step 2: Normalizzazione JD")
+        # Step 1: JSON -> CSV
+        logger.info("Step 1: Conversione JSON → CSV JD")
         try:
-            ontology_path = normalizzatore.DATASET_DIR / "skill_ontology.json"
-            input_jd = normalizzatore.DATASET_DIR / "jd_dataset.csv"
-            output_jd = normalizzatore.OUTPUT_DIR / "jd_dataset_normalized.csv"
-            ontology = normalizzatore.SkillOntology(ontology_path)
-            normalizzatore.normalize_jd_dataset(input_jd, output_jd, ontology)
-            logging.info(f"JD normalizzato: {output_jd}")
+            run_nlp_script(self.csv_script)
         except Exception as e:
-            logging.error(f"JD normalization failed: {e}")
+            logger.exception("Errore Step 1 JD: %s", e)
+            return
 
-        # Step 3: Embeddings JD
-        logging.info("Step 3: Generazione Embeddings JD")
+        # Step 2: Normalizzazione
+        logger.info("Step 2: Normalizzazione JD")
         try:
-            jd_df, jd_stats = embed_generator.process_jd_dataset()
-            logging.info(f"Embeddings JD generati: {embed_generator.JD_OUTPUT}")
+            run_nlp_script("normalizzatore.py")
         except Exception as e:
-            logging.error(f"JD embedding generation failed: {e}")
+            logger.exception("Errore Step 2 JD: %s", e)
 
-        logging.info("Pipeline JD completata!")
-        # Avvia matching dopo embeddings JD
-        logging.info("Step 4: Matching CV-JD")
-        matching_script = NLP_PATH / "Matching.py"
-        if matching_script.exists():
-            result = subprocess.run([
-                sys.executable, str(matching_script)
-            ], cwd=str(matching_script.parent), capture_output=True, text=True)
-            if result.returncode == 0:
-                logging.info("Matching completato.")
-                logging.info(result.stdout)
-            else:
-                logging.error(f"Matching fallito: {result.stderr}")
-        else:
-            logging.error(f"Matching.py non trovato: {matching_script}")
+        # Step 3: Embeddings
+        logger.info("Step 3: Generazione Embeddings JD")
+        try:
+            run_nlp_script("embed_generator.py")
+        except Exception as e:
+            logger.exception("Errore Step 3 JD: %s", e)
 
-# CV Batch Processor:
+        logger.info("Pipeline JD completata")
+
+# -----------------------------
+# CV Batch Processor
+# -----------------------------
 class CVBatchProcessor:
     def __init__(self):
         self.cvs_path = NLP_PATH / "data" / "cvs"
         self.dataset_path = NLP_PATH / "Dataset"
-        self.output_path = NLP_PATH / "Dataset" / "normalized"
+        self.output_path = self.dataset_path / "normalized"
+        self.cv_json_script = "cv_json_to_dataset_processor.py"
+        self.normalizer_script = "normalizzatore.py"
+        self.embed_script = "embed_generator.py"
+
+        # ensure folders exist
         self.dataset_path.mkdir(parents=True, exist_ok=True)
         self.output_path.mkdir(parents=True, exist_ok=True)
-        logging.info(f"Batch processor inizializzato")
-        logging.info(f"   CVs path: {self.cvs_path}")
-        logging.info(f"   Dataset path: {self.dataset_path}")
-    
-    def process_date_range(self, start_date: str = None, end_date: str = None):
-        """
-        Processa CV in un range di date.
-        
-        Args:
-            start_date: Data inizio (YYYY-MM-DD) o None per oggi
-            end_date: Data fine (YYYY-MM-DD) o None per start_date
-        """
-        print(f"\n{'='*80}")
-        print(f"BATCH PROCESSING CV - PIPELINE NLP COMPLETA")
-        print(f"{'='*80}")
-        
-        # Determina date
+
+    def process_date_range(self, start_date: str | None = None, end_date: str | None = None):
+        logger.info("%s", "=" * 80)
+        logger.info("BATCH PROCESSING CV - PIPELINE NLP COMPLETA")
+        logger.info("%s", "=" * 80)
+
         if start_date is None:
-            start_date = datetime.now().strftime("%Y-%m-%d")
+            start_date = datetime.now().date().isoformat()
         if end_date is None:
             end_date = start_date
-            
-        print(f"📅 Processing range: {start_date} → {end_date}")
-        
-        # 1. Trova cartelle con CV da processare
-        date_folders = self._find_date_folders(start_date, end_date)
-        if not date_folders:
-            print(f"⚠️ Nessun CV trovato per il range {start_date} - {end_date}")
-            return
-        
-        total_files = sum(len(list(folder.glob("*.json"))) for folder in date_folders)
-        print(f"📊 Trovati {total_files} CV in {len(date_folders)} cartelle")
-        
-        if total_files == 0:
-            print("⚠️ Nessun file JSON da processare")
-            return
-        
-        # 2. Esegui pipeline completa
+
+        # validate
         try:
-            # Step 1: JSON → CSV
-            print(f"\n🔄 Step 1: Conversione JSON → CSV")
-            self._json_to_csv_pipeline(date_folders)
-            # Step 2: CSV → CSV Normalizzato
-            print(f"\n🔄 Step 2: Normalizzazione Dataset")
-            self._normalization_pipeline()
-            # Step 3: CSV Normalizzato → Embeddings
-            print(f"\n🔄 Step 3: Generazione Embeddings")
-            self._embeddings_pipeline()
-            print(f"\n✅ Pipeline completata con successo!")
-            self._print_summary()
-            # Avvia matching dopo embeddings CV
-            print(f"\n🔄 Step 4: Matching CV-JD")
-            matching_script = NLP_PATH / "Matching.py"
-            import subprocess, sys
-            if matching_script.exists():
-                result = subprocess.run([
-                    sys.executable, str(matching_script)
-                ], cwd=str(matching_script.parent), capture_output=True, text=True)
-                if result.returncode == 0:
-                    print("✅ Matching completato.")
-                    print(result.stdout)
-                else:
-                    print("❌ Matching fallito.")
-                    print(result.stderr)
-            else:
-                print(f"❌ Matching.py non trovato: {matching_script}")
+            sd = datetime.fromisoformat(start_date).date()
+            ed = datetime.fromisoformat(end_date).date()
         except Exception as e:
-            print(f"❌ Errore durante processing: {e}")
-            import traceback
-            traceback.print_exc()
-    # --- CLI & MAIN ---
-    def main():
-        parser = argparse.ArgumentParser(description="Batch processor per CV/JD con pipeline NLP")
-        group = parser.add_mutually_exclusive_group(required=True)
-        group.add_argument("--process-cv-today", action="store_true", help="Processa CV di oggi")
-        group.add_argument("--process-cv-date", type=str, metavar="YYYY-MM-DD", help="Processa CV di una data specifica")
-        group.add_argument("--process-cv-range", nargs=2, metavar=("START", "END"), help="Processa CV in un range di date")
-        group.add_argument("--process-cv-all", action="store_true", help="Processa tutti i CV disponibili")
-        group.add_argument("--process-jd", action="store_true", help="Processa JD pipeline completa")
-
-        args = parser.parse_args()
-
-        if args.process_jd:
-            jd_processor = JDBatchProcessor()
-            jd_processor.process()
+            logger.error("Formato data non valido: %s", e)
+            return
+        if sd > ed:
+            logger.error("start_date deve essere <= end_date")
             return
 
-        processor = CVBatchProcessor()
+        logger.info("Processing range: %s -> %s", sd.isoformat(), ed.isoformat())
 
-        if args.process_cv_today:
-            processor.process_date_range()
-        elif args.process_cv_date:
-            processor.process_date_range(args.process_cv_date, args.process_cv_date)
-        elif args.process_cv_range:
-            processor.process_date_range(args.process_cv_range[0], args.process_cv_range[1])
-        elif args.process_cv_all:
-            all_dates = []
-            for date_folder in processor.cvs_path.iterdir():
-                if date_folder.is_dir() and len(date_folder.name) == 10:
-                    all_dates.append(date_folder.name)
-            if all_dates:
-                all_dates.sort()
-                processor.process_date_range(all_dates[0], all_dates[-1])
+        date_folders = self._find_date_folders(sd, ed)
+        if not date_folders:
+            logger.warning("Nessun CV trovato per il range %s - %s", sd.isoformat(), ed.isoformat())
+            return
+
+        total_files = sum(len(list(folder.glob("*.json"))) for folder in date_folders)
+        logger.info("Trovati %d CV in %d cartelle", total_files, len(date_folders))
+        if total_files == 0:
+            logger.warning("Nessun file JSON da processare")
+            return
+
+        try:
+            logger.info("Step 1: Conversione JSON -> CSV")
+            self._json_to_csv_pipeline(date_folders)
+
+            logger.info("Step 2: Normalizzazione")
+            self._normalization_pipeline()
+
+            logger.info("Step 3: Generazione embeddings")
+            self._embeddings_pipeline()
+
+            logger.info("Pipeline completata con successo")
+            self._print_summary()
+
+            # Step 4: Matching (una sola volta, se Matching.py presente)
+            matching_script = NLP_PATH / "Matching.py"
+            if matching_script.exists():
+                logger.info("Eseguo Matching CV-JD")
+                run_nlp_script("Matching.py")
             else:
-                logging.warning("Nessun CV trovato da processare")
+                logger.warning("Matching.py non trovato: %s", matching_script)
 
-    if __name__ == "__main__":
-        main()
-    
+        except Exception as e:
+            logger.exception("Errore durante processing: %s", e)
+
+    def _find_date_folders(self, start_date, end_date) -> List[Path]:
+        folders: List[Path] = []
+        if not self.cvs_path.exists():
+            logger.warning("cvs_path non esiste: %s", self.cvs_path)
+            return folders
+
+        for child in sorted(self.cvs_path.iterdir()):
+            if not child.is_dir():
+                continue
+            try:
+                d = datetime.fromisoformat(child.name).date()
+            except Exception:
+                continue
+            if start_date <= d <= end_date:
+                folders.append(child)
+        return folders
+
+    def _json_to_csv_pipeline(self, date_folders: List[Path]):
+        # In modalità B usiamo sempre lo script che si occupa di leggere data/cvs
+        script_name = self.cv_json_script
+        if not (NLP_PATH / script_name).exists():
+            raise FileNotFoundError(f"cv_json_to_dataset_processor.py non trovato sotto {NLP_PATH}")
+        # Possiamo passare opzionalmente il range a script
+        # Se lo script supporta args, potrebbe leggerli; qui non forziamo param
+        run_nlp_script(script_name)
+
     def _normalization_pipeline(self):
-        """Step 2: Normalizza il dataset usando normalizzatore.py."""
-        
-        # Controlla se esiste il CSV di input
-        input_csv = self.dataset_path / cv_json_to_dataset_processor.OUTPUT_FILENAME
+        # controlla esistenza input CSV (nome comune: cv_dataset.csv)
+        input_csv = self.dataset_path / "cv_dataset.csv"
         if not input_csv.exists():
             raise FileNotFoundError(f"CV dataset non trovato: {input_csv}")
-        
-        print(f"   📊 Input CSV: {input_csv} ({input_csv.stat().st_size // 1024} KB)")
-        
-        # Cambia working directory per il normalizzatore
-        import os
-        original_cwd = os.getcwd()
-        os.chdir(NLP_PATH)
-        
-        try:
-            # Esegui normalizzazione
-            print(f"   🔄 Normalizzazione in corso...")
-            normalizzatore.main()
-            
-            # Controlla output
-            output_csv = self.output_path / "cv_dataset_normalized.csv"
-            if output_csv.exists():
-                print(f"   ✅ CSV normalizzato: {output_csv} ({output_csv.stat().st_size // 1024} KB)")
-            else:
-                raise FileNotFoundError(f"Output normalizzazione non trovato: {output_csv}")
-                
-        finally:
-            os.chdir(original_cwd)
-    
+        logger.info("Input CSV: %s (%d KB)", input_csv, input_csv.stat().st_size // 1024)
+
+        # Esegui normalizzatore (script)
+        run_nlp_script(self.normalizer_script)
+
+        output_csv = self.output_path / "cv_dataset_normalized.csv"
+        if not output_csv.exists():
+            raise FileNotFoundError(f"Output normalizzazione non trovato: {output_csv}")
+        logger.info("CSV normalizzato: %s (%d KB)", output_csv, output_csv.stat().st_size // 1024)
+
     def _embeddings_pipeline(self):
-        """Step 3: Genera embeddings usando embed_generator.py."""
-        
-        # Controlla se esiste il CSV normalizzato
         normalized_csv = self.output_path / "cv_dataset_normalized.csv"
         if not normalized_csv.exists():
             raise FileNotFoundError(f"CSV normalizzato non trovato: {normalized_csv}")
-        
-        print(f"   📊 Input normalizzato: {normalized_csv}")
-        
-        # Cambia working directory per l'embed generator
-        import os
-        original_cwd = os.getcwd()
-        os.chdir(NLP_PATH)
-        
-        try:
-            # Esegui generazione embeddings
-            print(f"   🔄 Generazione embeddings...")
-            embed_generator.main()
-            
-            # Controlla output
-            embeddings_dir = NLP_PATH / "embeddings"
-            cv_embeddings = embeddings_dir / "cv_embeddings.csv"
-            
-            if cv_embeddings.exists():
-                print(f"   ✅ Embeddings generati: {cv_embeddings} ({cv_embeddings.stat().st_size // 1024} KB)")
-            else:
-                print(f"   ⚠️ File embeddings non trovato: {cv_embeddings}")
-                
-        finally:
-            os.chdir(original_cwd)
-    
-    def _print_summary(self):
-        """Stampa riassunto del processing."""
-        print(f"\n📈 RIASSUNTO PROCESSING")
-        print(f"{'='*50}")
-        
-        # Dataset files
-        dataset_csv = self.dataset_path / cv_json_to_dataset_processor.OUTPUT_FILENAME
-        normalized_csv = self.output_path / "cv_dataset_normalized.csv"
-        embeddings_csv = NLP_PATH / "embeddings" / "cv_embeddings.csv"
-        
-        files_info = [
-            ("Dataset grezzo", dataset_csv),
-            ("Dataset normalizzato", normalized_csv),
-            ("Embeddings CV", embeddings_csv),
-        ]
-        
-        for name, filepath in files_info:
-            if filepath.exists():
-                size_kb = filepath.stat().st_size // 1024
-                # Conta righe se è CSV
-                try:
-                    import pandas as pd
-                    df = pd.read_csv(filepath)
-                    rows = len(df)
-                    print(f"   {name:20}: {rows:4} righe, {size_kb:4} KB")
-                except:
-                    print(f"   {name:20}: {size_kb:4} KB")
-            else:
-                print(f"   {name:20}: ❌ Non trovato")
-        
-        print(f"\n🎯 Pipeline pronta per:")
-        print(f"   • Matching semantico CV-JD")
-        print(f"   • Analytics avanzati su skills")
-        print(f"   • Insights su trend tecnologici")
+        logger.info("Input normalizzato: %s", normalized_csv)
 
+        run_nlp_script(self.embed_script)
+
+        embeddings_file = NLP_PATH / "embeddings" / "cv_embeddings.csv"
+        if embeddings_file.exists():
+            logger.info("Embeddings generati: %s (%d KB)", embeddings_file, embeddings_file.stat().st_size // 1024)
+        else:
+            logger.warning("File embeddings non trovato: %s", embeddings_file)
+
+    def _print_summary(self):
+        logger.info("--- RIEPILOGO ---")
+        try:
+            norm = self.output_path / 'cv_dataset_normalized.csv'
+            emb = NLP_PATH / 'embeddings' / 'cv_embeddings.csv'
+            logger.info('CSV normalizzato: %s', norm if norm.exists() else 'MANCANTE')
+            logger.info('Embeddings: %s', emb if emb.exists() else 'MANCANTE')
+        except Exception:
+            logger.exception('Errore durante riepilogo')
+
+# -----------------------------
+# CLI
+# -----------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Batch processor per CV con pipeline NLP")
-    
+    parser = argparse.ArgumentParser(description='Batch processor per CV con pipeline NLP')
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--process-today", action="store_true", 
-                      help="Processa CV di oggi")
-    group.add_argument("--process-date", type=str, metavar="YYYY-MM-DD",
-                      help="Processa CV di una data specifica")
-    group.add_argument("--process-range", nargs=2, metavar=("START", "END"),
-                      help="Processa CV in un range di date")
-    group.add_argument("--process-all", action="store_true",
-                      help="Processa tutti i CV disponibili")
-    
+    group.add_argument('--process-today', action='store_true', help='Processa CV di oggi')
+    group.add_argument('--process-date', type=str, metavar='YYYY-MM-DD', help='Processa CV di una data specifica')
+    group.add_argument('--process-range', nargs=2, metavar=('START', 'END'), help='Processa CV in un range di date')
+    group.add_argument('--process-all', action='store_true', help='Processa tutti i CV disponibili')
+    group.add_argument('--process-jd', action='store_true', help='Esegui pipeline JD')
+
     args = parser.parse_args()
-    
+
+    if args.process_jd:
+        JDBatchProcessor().process()
+        return
+
     processor = CVBatchProcessor()
-    
+
     if args.process_today:
         processor.process_date_range()
     elif args.process_date:
@@ -349,36 +287,21 @@ def main():
     elif args.process_all:
         # Trova tutte le date disponibili
         all_dates = []
-        for date_folder in processor.cvs_path.iterdir():
-            if date_folder.is_dir() and len(date_folder.name) == 10:  # YYYY-MM-DD
-                all_dates.append(date_folder.name)
-        
+        if processor.cvs_path.exists():
+            for date_folder in processor.cvs_path.iterdir():
+                if date_folder.is_dir():
+                    try:
+                        _ = datetime.fromisoformat(date_folder.name)
+                        all_dates.append(date_folder.name)
+                    except Exception:
+                        continue
         if all_dates:
             all_dates.sort()
             processor.process_date_range(all_dates[0], all_dates[-1])
         else:
-            print("⚠️ Nessun CV trovato da processare")
-
-    # Trigger matching after embeddings are generated
-    try:
-        import subprocess, sys
-        matching_script = Path(__file__).parent / "NLP" / "Matching.py"
-        if matching_script.exists():
-            print("\n🚀 Avvio matching semantico CV-JD...")
-            result = subprocess.run([
-                sys.executable, str(matching_script)
-            ], cwd=str(matching_script.parent), capture_output=True, text=True)
-            if result.returncode == 0:
-                print("✅ Matching completato.")
-                print(result.stdout)
-            else:
-                print("❌ Matching fallito.")
-                print(result.stderr)
-        else:
-            print(f"❌ Matching.py non trovato: {matching_script}")
-    except Exception as e:
-        print(f"❌ Errore avvio matching: {e}")
+            logger.warning('Nessun CV trovato da processare')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
+    # Nessun codice aggiuntivo necessario qui.
