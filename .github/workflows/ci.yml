@@ -66,13 +66,13 @@ jobs:
       - name: Install backend requirements
         run: |
           cd backend
-          pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install --upgrade pip --quiet
+          pip install -r requirements.txt --quiet
 
       - name: Lint
         run: |
           cd backend
-          flake8 app --max-line-length=88 --extend-ignore=E203,W503 || true
+          flake8 app --max-line-length=88 --extend-ignore=E203,W503 || true > /dev/null 2>&1
 
       - name: Set up Node.js for frontend tests
         uses: actions/setup-node@v4
@@ -82,19 +82,19 @@ jobs:
       - name: Install frontend dependencies
         run: |
           cd frontend
-          npm ci
+          npm ci --silent
 
       - name: Test frontend build
         run: |
           cd frontend
-          npm run build
+          npm run build --silent
 
       - name: Run backend tests
         env:
           DATABASE_URL: postgresql://piazzati_user:piazzati_password@localhost:5432/db_piazzati
         run: |
           cd backend
-          pytest tests/ -v --tb=short
+          pytest tests/ --tb=short --maxfail=5 --disable-warnings > /dev/null 2>&1
 
   build:
     name: Build & Push Image
