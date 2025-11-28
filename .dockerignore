@@ -1,0 +1,27 @@
+# Ignora file e cartelle non necessari nella build Docker
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+*.env
+*.venv/
+venv/
+.env/
+.cache/
+__cache__/
+tests/
+data/
+logs/
+frontend/node_modules/
+frontend/dist/
+NLP/data/
+NLP/Dataset/
+NLP/embeddings/
+backend/data/
+backend/__pycache__/
+backend/tests/
+app/static/
+app/__pycache__/
