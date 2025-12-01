@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
-# Usage: MODEL_NAME="llama3.1:8b" REPO_DIR="/opt/piazzati" ./scripts/setup-server.sh
+# Usage: MODEL_NAME="llama3.2:3b" REPO_DIR="/opt/piazzati" ./scripts/setup-server.sh
 
-MODEL_NAME=${MODEL_NAME:-llama3.1:8b}
+MODEL_NAME=${MODEL_NAME:-llama3.2:3b}
 REPO_DIR=${REPO_DIR:-/opt/piazzati}
 MARKER_DIR=${MARKER_DIR:-/var/lib/piazzati}
 MARKER_FILE="${MARKER_DIR}/.ollama_setup_done"

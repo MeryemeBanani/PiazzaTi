@@ -195,7 +195,7 @@ jobs:
 
             # Optionally start provisioning in background (non-blocking)
             if [ "${RUN_PROVISION:-false}" = "true" ] && [ -f ./scripts/setup-server.sh ]; then
-              MODEL_NAME="${OLLAMA_MODEL_NAME:-llama3.1:8b}" REPO_DIR="${REPO_DIR}" nohup bash ./scripts/setup-server.sh > /var/log/setup-server.log 2>&1 &
+              MODEL_NAME="${OLLAMA_MODEL_NAME:-llama3.2:3b}" REPO_DIR="${REPO_DIR}" nohup bash ./scripts/setup-server.sh > /var/log/setup-server.log 2>&1 &
               echo "[remote] started provisioning in background"
             fi
 
