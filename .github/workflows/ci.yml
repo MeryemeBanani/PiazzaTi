@@ -112,6 +112,20 @@ jobs:
       - name: Remove unused Docker images
         run: docker system prune -af
 
+      - name: Check and free disk before build
+        run: |
+          echo "=== Disk before ==="
+          df -h
+          echo "=== Workspace size ==="
+          du -sh $GITHUB_WORKSPACE || true
+          echo "=== Clean apt and caches ==="
+          sudo apt-get clean || true
+          sudo rm -rf $HOME/.cache/* || true
+          sudo rm -rf $HOME/.npm/_cacache || true
+          docker --version && sudo docker system prune -af || true
+          echo "=== Disk after ==="
+          df -h
+
       - name: Log in to Scaleway Registry
         uses: docker/login-action@v3
         with:
