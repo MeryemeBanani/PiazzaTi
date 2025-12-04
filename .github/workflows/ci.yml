@@ -185,11 +185,11 @@ jobs:
             cd /tmp
             mkdir -p ${REPO_DIR}
             if [ ! -d ${REPO_DIR}/.git ]; then
-              git clone https://github.com/MeryemeBanani/PiazzaTi.git ${REPO_DIR}
+              git clone https://github.com/LaPiazzaSviluppatori/PiazzaTi.git ${REPO_DIR}
             fi
             cd ${REPO_DIR}
             # Ensure origin uses HTTPS so remote shell can fetch without an SSH key
-            git remote set-url origin https://github.com/MeryemeBanani/PiazzaTi.git || true
+            git remote set-url origin https://github.com/LaPiazzaSviluppatori/PiazzaTi.git || true
             git fetch origin main
             git reset --hard origin/main
 

@@ -171,6 +171,7 @@ postgresql://piazzati_user:PASSWORD@IP:5432/db_piazzati?sslmode=require
 
 ===============================
 FASE 5: BUILD E DEPLOY
+
 ===============================
 
 5.1 PRIMO DEPLOYMENT
