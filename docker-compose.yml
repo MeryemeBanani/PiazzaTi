@@ -68,7 +68,8 @@ services:
     env_file:
       - ./backend/.env
     container_name: piazzati-backend
-      # ports:
+    ports:
+      - "8000:8000"
     volumes:
       - ./backend:/app
       - /var/lib/docker/piazzati-data:/app/NLP/data
