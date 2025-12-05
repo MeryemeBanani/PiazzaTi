@@ -21,8 +21,8 @@ class CVBatchStorage:
     """
     
     def __init__(self):
-        # Path base per i JSON del modulo NLP - tutti i file in /app/NLP/data/cvs
-        self.base_path = Path("/app/NLP/data/cvs")
+        # Path base per i JSON del modulo NLP - tutti i file in /opt/piazzati/backend/NLP/data/cvs
+        self.base_path = Path("/opt/piazzati/backend/NLP/data/cvs")
         self.base_path.mkdir(parents=True, exist_ok=True)
         print(f"📁 CVBatchStorage inizializzato: {self.base_path}")
     

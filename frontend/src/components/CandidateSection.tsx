@@ -61,6 +61,8 @@ export const CandidateSection = ({
   // CV file upload
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  // Spinner visibilità
+  const [showSpinner, setShowSpinner] = useState(false);
 
   const handleUploadCV = async () => {
     if (!cvFile) {
@@ -68,10 +70,11 @@ export const CandidateSection = ({
       return;
     }
     setUploading(true);
+    setShowSpinner(true);
     const formData = new FormData();
     formData.append("file", cvFile);
     try {
-      const response = await fetch("/api/upload_cv", {
+      const response = await fetch("/api/parse/upload", {
         method: "POST",
         body: formData,
       });
@@ -92,6 +95,7 @@ export const CandidateSection = ({
     } finally {
       setUploading(false);
       setCvFile(null);
+      setShowSpinner(false);
     }
   };
 
@@ -404,6 +408,24 @@ export const CandidateSection = ({
             <Upload className="h-4 w-4 mr-2" />
             {uploading ? "Caricamento..." : "Carica CV"}
           </Button>
+          {showSpinner && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                border: '6px solid #eee',
+                borderTop: '6px solid #3498db',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
+              <style>{`
+                @keyframes spin {
+                  0% { transform: rotate(0deg); }
+                  100% { transform: rotate(360deg); }
+                }
+              `}</style>
+            </div>
+          )}
         </Card>
         {/* Aggiungi CV da testo (modal) */}
         <Card className="p-6">

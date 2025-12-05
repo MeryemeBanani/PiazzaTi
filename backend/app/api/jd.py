@@ -4,7 +4,7 @@ import os
 import uuid
 import json
 
-INPUT_FOLDER = "/app/NLP/data/jds"
+INPUT_FOLDER = "/opt/piazzati/backend/NLP/data/jds"
 
 router = APIRouter()
 
