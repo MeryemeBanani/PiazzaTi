@@ -18,7 +18,7 @@ from typing import Optional, Tuple
 # CONFIGURAZIONE
 # ============================================================================
 
-MODEL_NAME = "llama3.1:8b"
+MODEL_NAME = "llama3.2:3b"
 OLLAMA_HOST = "http://localhost:11434"
 MAX_DOWNLOAD_TIME = 1800  # 30 minuti timeout
 SERVER_STARTUP_TIMEOUT = 30  # 30 secondi per avvio server
